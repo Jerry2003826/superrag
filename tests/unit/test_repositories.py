@@ -38,6 +38,7 @@ def test_create_core_evidence_chain(db_session: Session) -> None:
         paper_id=paper.paper_id,
         study_id=study.study_id,
         text="Compound X reduced IL-6 in AD mouse models.",
+        source_format="UNKNOWN",
     )
     result = results.create(
         study_id=study.study_id,
