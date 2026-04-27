@@ -16,8 +16,22 @@
 | OpenSearch | http://127.0.0.1:9200 |
 | Qdrant | http://127.0.0.1:6333 |
 | Neo4j Browser | http://127.0.0.1:7474 |
+| GROBID | http://127.0.0.1:8070 |
 
 第一版按私有/internal 部署处理，使用部署级 `X-API-Key` 控制访问，不包含多用户登录、多租户和计费。请只在可信网络中开放。
+
+## 后台服务账号与用途
+
+前端页面是客户日常使用入口；下面这些后台服务主要给部署方、运维或开发人员排查问题使用。
+
+| 服务 | 是干什么的 | 账号密码 |
+| --- | --- | --- |
+| MinIO 控制台 | 查看上传的论文原文、解析 JSON、后续页面图片等对象存储文件 | 账号是 `.env` 的 `MINIO_ROOT_USER`，密码是 `.env` 的 `MINIO_ROOT_PASSWORD` |
+| Neo4j Browser | 查看论文、研究、证据片段、结构化结果之间的图关系 | `.env` 的 `NEO4J_AUTH`，斜杠前是账号，斜杠后是密码，例如 `neo4j/your-secret` |
+| GROBID | PDF 文献解析服务，后端会自动调用它解析 PDF | 不需要账号密码 |
+| 前端 Runtime 里的 `X-API-Key` | 保护注册、上传、抽取、查询等业务 API | `.env` 的 `EBRAG_SECURITY__API_KEY`，它不是 MinIO/Neo4j/LLM 密钥 |
+
+不要把 MinIO、Neo4j 或 LLM provider 的密钥填到前端 `X-API-Key` 输入框。客户只需要部署方提供的 `EBRAG_SECURITY__API_KEY`。
 
 ## API Key
 

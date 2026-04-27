@@ -73,6 +73,15 @@ docker compose up -d --build
 | Neo4j Browser | http://127.0.0.1:7474 |
 | GROBID | http://127.0.0.1:8070 |
 
+后台服务账号：
+
+| 服务 | 用途 | 账号/密码来源 |
+| --- | --- | --- |
+| MinIO Console | 查看上传原文、解析产物等对象存储文件 | 账号是 `.env` 的 `MINIO_ROOT_USER`，密码是 `MINIO_ROOT_PASSWORD` |
+| Neo4j Browser | 查看论文、研究、证据、结果之间的图关系 | `NEO4J_AUTH` 的斜杠前是账号，斜杠后是密码，例如 `neo4j/your-secret` |
+| GROBID | PDF 文献解析服务 | 不需要账号密码 |
+| 前端 `X-API-Key` | 访问业务 API 的部署口令 | `.env` 的 `EBRAG_SECURITY__API_KEY`，不是 MinIO/Neo4j/LLM 密钥 |
+
 健康检查：
 
 ```powershell
