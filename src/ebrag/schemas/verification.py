@@ -18,6 +18,7 @@ class VerificationVerdict(BaseModel):
         "contradicted",
         "wrong_scope",
         "overgeneralized",
+        "uncited_numeric",
     ]
     reason: str = Field(min_length=1)
     corrected_claim: str | None = None
