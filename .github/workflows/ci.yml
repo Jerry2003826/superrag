@@ -40,6 +40,13 @@ jobs:
         run: python -m pytest
 
       - name: Docker Compose config
+        env:
+          POSTGRES_USER: ebrag_app
+          POSTGRES_PASSWORD: ci-postgres-secret
+          MINIO_ROOT_USER: ebrag_minio
+          MINIO_ROOT_PASSWORD: ci-minio-secret
+          NEO4J_AUTH: neo4j/ci-neo4j-secret
+          EBRAG_SECURITY__API_KEY: ci-api-key
         run: docker compose config --quiet
 
       - name: Set up Node
