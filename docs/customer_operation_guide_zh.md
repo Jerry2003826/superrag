@@ -21,12 +21,39 @@
 
 ## API Key
 
-部署方会在 `.env` 中配置 `EBRAG_SECURITY__API_KEY`。客户打开前端后，需要先在左侧 Runtime 区域填入这串 API Key；之后注册、上传、抽取和查询请求都会自动携带 `X-API-Key`。
+`X-API-Key` 是本系统自己的部署访问口令，用来保护注册、上传、抽取、查询等业务 API。它不是 z.ai、OpenAI、Anthropic 或 Gemini 的 LLM API Key。
+
+这串 Key 由部署方生成并写入服务器 `.env`，客户从部署方获取。部署方可以用 PowerShell 生成：
+
+```powershell
+$deploymentApiKey = [guid]::NewGuid().ToString("N")
+$deploymentApiKey
+```
+
+然后把它写入 `.env`：
+
+```env
+EBRAG_SECURITY__API_KEY=上一步生成的部署访问Key
+```
+
+更新 `.env` 后重启 API 和前端：
+
+```powershell
+docker compose up -d --build api frontend
+```
+
+客户打开前端后，需要先在左侧 Runtime 区域填入部署方提供的这串 Key，再点击 `Save`。之后注册、上传、抽取和查询请求都会自动携带 `X-API-Key`。
 
 命令行调用 API 时先准备请求头：
 
 ```powershell
 $headers = @{ "X-API-Key" = $env:EBRAG_SECURITY__API_KEY }
+```
+
+如果命令行环境没有加载 `.env`，也可以直接填写部署访问 Key：
+
+```powershell
+$headers = @{ "X-API-Key" = "部署方提供的Key" }
 ```
 
 ## 使用总流程
@@ -405,7 +432,8 @@ EBRAG_VECTOR__COLLECTION=evidence_spans
 
 - `.env` 不应提交到 GitHub。
 - 生产环境不能使用 fake LLM 或 fake embedding。
-- 部署 API Key 和 LLM API Key 是两类不同密钥，都应由客户或部署方保管。
+- 部署 API Key 由部署方自行生成，用于访问本系统；LLM API Key 由模型供应商提供，用于调用模型。两类密钥不要混用。
+- 轮换部署 API Key 时，重新生成 `EBRAG_SECURITY__API_KEY`，更新 `.env`，重启 `api frontend`，再把新 Key 发给客户。
 - 如果部署到公网，必须额外加 HTTPS、防火墙和更细粒度的访问控制。
 
 ## 结果解读

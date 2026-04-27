@@ -42,9 +42,17 @@ cd "E:\super rag\evidence-bio-rag"
 
 ```powershell
 Copy-Item .env.example .env
-$apiKey = [guid]::NewGuid().ToString("N")
-# 将 .env 中的 EBRAG_SECURITY__API_KEY 替换为 $apiKey，并替换数据库、MinIO、Neo4j 的占位密钥
 ```
+
+生成部署访问 Key。这个 Key 是本系统自己的访问口令，不是 z.ai、OpenAI 或其他 LLM provider 的 API Key：
+
+```powershell
+$apiKey = [guid]::NewGuid().ToString("N")
+$apiKey
+(Get-Content .env) -replace '^EBRAG_SECURITY__API_KEY=.*', "EBRAG_SECURITY__API_KEY=$apiKey" | Set-Content .env
+```
+
+继续把 `.env` 里的数据库、MinIO、Neo4j 占位密钥替换成你自己的强密码。
 
 启动完整本地栈：
 
@@ -71,7 +79,7 @@ docker compose up -d --build
 Invoke-RestMethod http://127.0.0.1:8000/health
 ```
 
-业务 API 默认需要 `X-API-Key`。前端左侧 Runtime 区域填入 `.env` 里的 `EBRAG_SECURITY__API_KEY` 后即可使用。
+业务 API 默认需要 `X-API-Key`。前端左侧 Runtime 区域填入 `.env` 里的 `EBRAG_SECURITY__API_KEY` 后即可使用；交付给客户时，由部署方把这串部署访问 Key 发给客户。
 
 停止服务：
 
@@ -170,6 +178,12 @@ npm run dev
 
 ```powershell
 $headers = @{ "X-API-Key" = $env:EBRAG_SECURITY__API_KEY }
+```
+
+如果当前 PowerShell 没有加载 `.env`，也可以直接把部署访问 Key 写进变量：
+
+```powershell
+$headers = @{ "X-API-Key" = "你的部署访问Key" }
 ```
 
 注册论文：
