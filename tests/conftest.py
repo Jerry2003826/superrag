@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -12,6 +13,10 @@ from ebrag.db.base import Base
 from ebrag.settings import load_settings
 
 _ = _models
+
+os.environ.setdefault("EBRAG_PROJECT__ENVIRONMENT", "dev")
+os.environ.setdefault("EBRAG_LLM__PROVIDER", "fake")
+os.environ.setdefault("EBRAG_EMBEDDING__PROVIDER", "fake")
 
 
 @pytest.fixture(autouse=True)

@@ -42,6 +42,8 @@ cd "E:\super rag\evidence-bio-rag"
 
 ```powershell
 Copy-Item .env.example .env
+$apiKey = [guid]::NewGuid().ToString("N")
+# 将 .env 中的 EBRAG_SECURITY__API_KEY 替换为 $apiKey，并替换数据库、MinIO、Neo4j 的占位密钥
 ```
 
 启动完整本地栈：
@@ -56,7 +58,7 @@ docker compose up -d --build
 | --- | --- |
 | 前端 | http://127.0.0.1:3000 |
 | API | http://127.0.0.1:8000 |
-| API docs | http://127.0.0.1:8000/docs |
+| 健康检查 | http://127.0.0.1:8000/health |
 | OpenSearch | http://127.0.0.1:9200 |
 | Qdrant | http://127.0.0.1:6333 |
 | MinIO Console | http://127.0.0.1:9001 |
@@ -68,6 +70,8 @@ docker compose up -d --build
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/health
 ```
+
+业务 API 默认需要 `X-API-Key`。前端左侧 Runtime 区域填入 `.env` 里的 `EBRAG_SECURITY__API_KEY` 后即可使用。
 
 停止服务：
 
@@ -153,13 +157,20 @@ npm run dev
 ## 使用流程
 
 1. 打开前端 `http://127.0.0.1:3000`。
-2. 注册一篇论文，得到 `paper_id` 和 `study_id`。
-3. 上传 JATS XML、PDF 或 TXT 文档。
-4. 系统会把原文写入 MinIO，解析文档，保存 chunks/evidence spans，并写入 OpenSearch 与 Qdrant。
-5. 运行抽取。fake provider 下前端会提交一份示例结构化抽取；真实 provider 下可以直接让后端调用配置的 LLM。
-6. 输入问题，调用 `/query/full`，查看带 result ids 和 evidence span ids 的回答。
+2. 在左侧 Runtime 区域填入部署方提供的 `X-API-Key`。
+3. 注册一篇论文，得到 `paper_id` 和 `study_id`。
+4. 上传 JATS XML、PDF 或 TXT 文档。
+5. 系统会把原文写入 MinIO，解析文档，保存 chunks/evidence spans，并写入 OpenSearch 与 Qdrant。
+6. 运行抽取。fake provider 下前端会提交一份示例结构化抽取；真实 provider 下可以直接让后端调用配置的 LLM。
+7. 输入问题，调用 `/query/full`，查看带 result ids 和 evidence span ids 的回答。
 
 ## API 示例
+
+先准备请求头：
+
+```powershell
+$headers = @{ "X-API-Key" = $env:EBRAG_SECURITY__API_KEY }
+```
 
 注册论文：
 
@@ -178,6 +189,7 @@ $paper = @{
 Invoke-RestMethod `
   -Uri "http://127.0.0.1:8000/papers/register" `
   -Method Post `
+  -Headers $headers `
   -Body $paper `
   -ContentType "application/json"
 ```
@@ -194,6 +206,7 @@ $form = @{
 Invoke-RestMethod `
   -Uri "http://127.0.0.1:8000/papers/P00000001/documents" `
   -Method Post `
+  -Headers $headers `
   -Form $form
 ```
 
@@ -203,6 +216,7 @@ Invoke-RestMethod `
 Invoke-RestMethod `
   -Uri "http://127.0.0.1:8000/index/rebuild" `
   -Method Post `
+  -Headers $headers `
   -Body '{"paper_id":"P00000001"}' `
   -ContentType "application/json"
 ```
@@ -213,6 +227,7 @@ Invoke-RestMethod `
 Invoke-RestMethod `
   -Uri "http://127.0.0.1:8000/query/full" `
   -Method Post `
+  -Headers $headers `
   -Body '{"query":"Does Compound X reduce IL-6?","query_scope":"animal"}' `
   -ContentType "application/json"
 ```
@@ -241,7 +256,7 @@ npm run build
 
 ## 当前边界
 
-- 第一版按私有/internal 单机部署处理，没有登录鉴权、多租户和计费。
+- 第一版按私有/internal 单机部署处理，使用部署级 API Key，不包含多用户登录、多租户和计费。
 - reranker 暂时使用轻量本地融合/排序，后续可替换为 cross-encoder。
 - PDF 解析依赖 GROBID，复杂版式和 OCR 质量仍需要单独评估。
 - 真实 LLM 输出必须通过 Pydantic schema 校验；无法校验的输出不会写入无效外键数据。

@@ -11,14 +11,23 @@
 | 功能 | 地址 |
 | --- | --- |
 | 前端页面 | http://127.0.0.1:3000 |
-| API 文档 | http://127.0.0.1:8000/docs |
 | 健康检查 | http://127.0.0.1:8000/health |
 | MinIO 控制台 | http://127.0.0.1:9001 |
 | OpenSearch | http://127.0.0.1:9200 |
 | Qdrant | http://127.0.0.1:6333 |
 | Neo4j Browser | http://127.0.0.1:7474 |
 
-第一版按私有/internal 部署处理，不包含登录、权限、多租户和计费。请只在可信网络中开放。
+第一版按私有/internal 部署处理，使用部署级 `X-API-Key` 控制访问，不包含多用户登录、多租户和计费。请只在可信网络中开放。
+
+## API Key
+
+部署方会在 `.env` 中配置 `EBRAG_SECURITY__API_KEY`。客户打开前端后，需要先在左侧 Runtime 区域填入这串 API Key；之后注册、上传、抽取和查询请求都会自动携带 `X-API-Key`。
+
+命令行调用 API 时先准备请求头：
+
+```powershell
+$headers = @{ "X-API-Key" = $env:EBRAG_SECURITY__API_KEY }
+```
 
 ## 使用总流程
 
@@ -200,6 +209,7 @@ foreach ($row in $rows) {
   $registered = Invoke-RestMethod `
     -Uri "http://127.0.0.1:8000/papers/register" `
     -Method Post `
+    -Headers $headers `
     -Body $metadata `
     -ContentType "application/json"
 
@@ -213,11 +223,13 @@ foreach ($row in $rows) {
   $upload = Invoke-RestMethod `
     -Uri "http://127.0.0.1:8000/papers/$paperId/documents" `
     -Method Post `
+    -Headers $headers `
     -Form $form
 
   $extract = Invoke-RestMethod `
     -Uri "http://127.0.0.1:8000/extraction/$paperId/run" `
     -Method Post `
+    -Headers $headers `
     -Body "{}" `
     -ContentType "application/json"
 
@@ -275,6 +287,7 @@ $paper = @{
 Invoke-RestMethod `
   -Uri "http://127.0.0.1:8000/papers/register" `
   -Method Post `
+  -Headers $headers `
   -Body $paper `
   -ContentType "application/json"
 ```
@@ -291,6 +304,7 @@ $form = @{
 Invoke-RestMethod `
   -Uri "http://127.0.0.1:8000/papers/P00000001/documents" `
   -Method Post `
+  -Headers $headers `
   -Form $form
 ```
 
@@ -300,6 +314,7 @@ Invoke-RestMethod `
 Invoke-RestMethod `
   -Uri "http://127.0.0.1:8000/extraction/P00000001/run" `
   -Method Post `
+  -Headers $headers `
   -Body "{}" `
   -ContentType "application/json"
 ```
@@ -310,6 +325,7 @@ Invoke-RestMethod `
 Invoke-RestMethod `
   -Uri "http://127.0.0.1:8000/query/full" `
   -Method Post `
+  -Headers $headers `
   -Body '{"query":"Does Compound X reduce IL-6?","query_scope":"animal"}' `
   -ContentType "application/json"
 ```
@@ -320,6 +336,7 @@ Invoke-RestMethod `
 Invoke-RestMethod `
   -Uri "http://127.0.0.1:8000/index/rebuild" `
   -Method Post `
+  -Headers $headers `
   -Body '{"paper_id":"P00000001"}' `
   -ContentType "application/json"
 ```
@@ -374,6 +391,7 @@ docker compose up -d --build api
 
 ```env
 EBRAG_PROJECT__ENVIRONMENT=prod
+EBRAG_SECURITY__API_KEY=your-deployment-api-key
 EBRAG_LLM__PROVIDER=openai
 EBRAG_LLM__API_KEY=your-api-key
 EBRAG_LLM__MODEL=glm-5.1
@@ -387,8 +405,8 @@ EBRAG_VECTOR__COLLECTION=evidence_spans
 
 - `.env` 不应提交到 GitHub。
 - 生产环境不能使用 fake LLM 或 fake embedding。
-- API key 应由客户或部署方保管。
-- 如果部署到公网，必须额外加鉴权、HTTPS、防火墙和访问控制。
+- 部署 API Key 和 LLM API Key 是两类不同密钥，都应由客户或部署方保管。
+- 如果部署到公网，必须额外加 HTTPS、防火墙和更细粒度的访问控制。
 
 ## 结果解读
 
@@ -424,7 +442,7 @@ EBRAG_VECTOR__COLLECTION=evidence_spans
 docker compose ps
 ```
 
-确认 `frontend` 服务端口是 `0.0.0.0:3000->80/tcp`。
+确认 `frontend` 服务端口是 `127.0.0.1:3000->80/tcp`。
 
 ### API 不健康
 
@@ -435,7 +453,7 @@ Invoke-RestMethod http://127.0.0.1:8000/health
 docker compose logs api --tail=200
 ```
 
-常见原因包括数据库未启动、`.env` 配置错误、LLM provider 缺少 API key。
+常见原因包括数据库未启动、`.env` 配置错误、部署 API Key 缺失、LLM provider 缺少 API key。
 
 ### 上传后 evidence span 数量为 0
 
@@ -490,4 +508,3 @@ docker compose logs api --tail=200
 ## 推荐客户话术
 
 > 这个系统不是普通聊天机器人，而是先把论文导入证据库，再从论文中抽取结构化证据，最后基于证据回答问题。每个回答都会尽量绑定到具体 result 和 evidence span。如果证据不足或范围不匹配，系统会提示不足或阻断，而不是强行生成结论。
-

@@ -7,6 +7,7 @@ import {
   DatabaseZap,
   FileText,
   FlaskConical,
+  KeyRound,
   Loader2,
   Search,
   ShieldCheck,
@@ -48,11 +49,27 @@ type QueryResult = {
 };
 
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const apiKeyStorageKey = "ebrag.apiKey";
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${apiBase}${path}`, init);
+async function requestJson<T>(path: string, apiKey: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  const trimmedApiKey = apiKey.trim();
+  if (trimmedApiKey) {
+    headers.set("X-API-Key", trimmedApiKey);
+  }
+  const response = await fetch(`${apiBase}${path}`, { ...init, headers });
   if (!response.ok) {
-    const detail = await response.text();
+    const detailText = await response.text();
+    let detail = detailText;
+    try {
+      const parsed = JSON.parse(detailText) as { detail?: unknown };
+      detail = typeof parsed.detail === "string" ? parsed.detail : JSON.stringify(parsed.detail ?? parsed);
+    } catch {
+      detail = detailText;
+    }
+    if (response.status === 401) {
+      throw new Error("API key missing or invalid. Save the deployment API key in Runtime.");
+    }
     throw new Error(detail || `Request failed: ${response.status}`);
   }
   return (await response.json()) as T;
@@ -66,6 +83,8 @@ function App() {
   const [status, setStatus] = useState("Ready");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem(apiKeyStorageKey) ?? "");
+  const [apiKeyDraft, setApiKeyDraft] = useState(apiKey);
   const [form, setForm] = useState({
     title: "Compound X reduces IL-6 in APP/PS1 mice",
     doi: `10.0000/local-${Date.now()}`,
@@ -90,6 +109,18 @@ function App() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function saveApiKey() {
+    const trimmed = apiKeyDraft.trim();
+    setApiKey(trimmed);
+    if (trimmed) {
+      localStorage.setItem(apiKeyStorageKey, trimmed);
+      setStatus("API key saved");
+    } else {
+      localStorage.removeItem(apiKeyStorageKey);
+      setStatus("API key cleared");
+    }
+  }
+
   async function registerPaper(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy("register");
@@ -105,7 +136,7 @@ function App() {
         source_database: "frontend",
         source_url: "http://localhost/frontend"
       };
-      const result = await requestJson<RegisteredPaper>("/papers/register", {
+      const result = await requestJson<RegisteredPaper>("/papers/register", apiKey, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -128,7 +159,7 @@ function App() {
       data.append("source_format", selectedFile.name.toLowerCase().endsWith(".pdf") ? "PDF" : selectedFile.name.toLowerCase().endsWith(".txt") ? "TEXT" : "JATS_XML");
       data.append("document_id", selectedFile.name);
       data.append("file", selectedFile);
-      const result = await requestJson<UploadResult>(`/papers/${paper.paper_id}/documents`, {
+      const result = await requestJson<UploadResult>(`/papers/${paper.paper_id}/documents`, apiKey, {
         method: "POST",
         body: data
       });
@@ -146,7 +177,7 @@ function App() {
     setBusy("extract");
     setError(null);
     try {
-      await requestJson(`/extraction/${paper.paper_id}/run`, {
+      await requestJson(`/extraction/${paper.paper_id}/run`, apiKey, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -195,7 +226,7 @@ function App() {
     setBusy("query");
     setError(null);
     try {
-      const result = await requestJson<QueryResult>("/query/full", {
+      const result = await requestJson<QueryResult>("/query/full", apiKey, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: form.query, query_scope: "animal" })
@@ -239,6 +270,24 @@ function App() {
           <div className="mt-8 rounded-lg border border-line bg-mist p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-slate">Runtime</p>
             <p className="mt-2 text-sm font-semibold">{status}</p>
+            <div className="mt-4 rounded-lg border border-line bg-white p-3">
+              <label className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate">
+                <KeyRound size={14} /> API key
+              </label>
+              <div className="mt-2 flex gap-2">
+                <input
+                  className="min-w-0 flex-1 rounded-lg border border-line px-3 py-2 text-xs outline-none focus:border-teal"
+                  type="password"
+                  value={apiKeyDraft}
+                  placeholder="X-API-Key"
+                  onChange={(event) => setApiKeyDraft(event.target.value)}
+                />
+                <button className="rounded-lg bg-ink px-3 py-2 text-xs font-semibold text-white" type="button" onClick={saveApiKey}>
+                  Save
+                </button>
+              </div>
+              <p className={apiKey ? "mt-2 text-xs text-teal" : "mt-2 text-xs text-slate"}>{apiKey ? "configured" : "missing"}</p>
+            </div>
             <div className="mt-4 space-y-2">
               {progress.map((item) => (
                 <div key={item.label} className="flex items-center justify-between text-xs">
@@ -260,8 +309,8 @@ function App() {
                 Literature intake, extraction, and cited answers in one workspace.
               </h1>
             </div>
-            <a className="inline-flex items-center gap-2 rounded-lg border border-line bg-white px-4 py-2 text-sm font-medium shadow-soft" href={`${apiBase}/docs`} target="_blank">
-              API docs <ArrowRight size={16} />
+            <a className="inline-flex items-center gap-2 rounded-lg border border-line bg-white px-4 py-2 text-sm font-medium shadow-soft" href={`${apiBase}/health`} target="_blank">
+              Health <ArrowRight size={16} />
             </a>
           </header>
 

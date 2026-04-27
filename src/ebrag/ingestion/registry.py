@@ -127,7 +127,9 @@ class LiteratureRegistry:
         )
         duplicate_kind = "candidate" if candidate is not None else None
         if duplicate_kind is not None:
-            assert candidate is not None
+            if candidate is None:
+                msg = "Expected duplicate candidate when duplicate_kind is set"
+                raise RuntimeError(msg)
             self.papers.create_audit_log(
                 action="paper.duplicate_candidate",
                 target_type="paper",

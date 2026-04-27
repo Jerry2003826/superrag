@@ -2,10 +2,13 @@ FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/src
+ENV HF_HOME=/home/appuser/.cache/huggingface
+ENV SENTENCE_TRANSFORMERS_HOME=/home/appuser/.cache/sentence-transformers
 
 WORKDIR /app
 
 RUN python -m pip install --upgrade pip
+RUN groupadd --system appuser && useradd --system --create-home --gid appuser appuser
 
 COPY pyproject.toml README.md /app/
 RUN python - <<'PY' > /tmp/requirements.txt
@@ -25,6 +28,11 @@ COPY configs /app/configs
 
 RUN python -m pip install --no-deps .
 COPY scripts/docker_api_entrypoint.py /app/scripts/docker_api_entrypoint.py
+
+RUN mkdir -p /home/appuser/.cache /app/.local-object-store \
+    && chown -R appuser:appuser /home/appuser /app
+
+USER appuser
 
 EXPOSE 8000
 

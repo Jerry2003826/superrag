@@ -32,7 +32,7 @@ class ProjectSettings(BaseModel):
 
 
 class DatabaseSettings(BaseModel):
-    url: str = "postgresql+psycopg://ebrag:ebrag@localhost:5432/ebrag"
+    url: str = "sqlite+pysqlite:///./ebrag-dev.sqlite3"
 
 
 class ServicesSettings(BaseModel):
@@ -67,12 +67,12 @@ class RerankerSettings(BaseModel):
 
 
 class StorageSettings(BaseModel):
-    object_store: Literal["minio", "s3", "local"] = "minio"
+    object_store: Literal["minio", "s3", "local"] = "local"
     raw_bucket: str = "raw-documents"
     parsed_bucket: str = "parsed-documents"
     page_image_bucket: str = "page-images"
-    minio_access_key: str = "minio"
-    minio_secret_key: str = "minio123"
+    minio_access_key: str | None = None
+    minio_secret_key: str | None = None
     minio_secure: bool = False
     local_root: str = ".local-object-store"
 
@@ -123,6 +123,48 @@ class EvaluationSettings(BaseModel):
     final_uncited_numeric_target: int = 0
 
 
+def _csv_values(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+class SecuritySettings(BaseModel):
+    api_key: str | None = None
+    api_key_header: str = "X-API-Key"
+    cors_origins: str = "http://127.0.0.1:3000,http://localhost:3000"
+    cors_methods: str = "GET,POST,OPTIONS"
+    cors_headers: str = "Content-Type,Authorization,X-API-Key"
+    rate_limit_enabled: bool = True
+    rate_limit_default: str = "120/minute"
+    rate_limit_query: str = "30/minute"
+    rate_limit_ingestion: str = "10/minute"
+    rate_limit_admin: str = "5/hour"
+    upload_max_bytes: int = Field(default=50 * 1024 * 1024, gt=0)
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return _csv_values(self.cors_origins)
+
+    @property
+    def cors_method_list(self) -> list[str]:
+        return _csv_values(self.cors_methods)
+
+    @property
+    def cors_header_list(self) -> list[str]:
+        return _csv_values(self.cors_headers)
+
+
+def _is_placeholder_secret(value: str | None) -> bool:
+    if value is None:
+        return True
+    cleaned = value.strip().lower()
+    return (
+        cleaned == ""
+        or cleaned in {"change-me", "changeme", "replace-me", "replace_me"}
+        or cleaned.startswith("replace-with")
+        or cleaned.startswith("<")
+    )
+
+
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -145,6 +187,7 @@ class AppSettings(BaseSettings):
     synthesis: SynthesisSettings = Field(default_factory=SynthesisSettings)
     verification: VerificationSettings = Field(default_factory=VerificationSettings)
     evaluation: EvaluationSettings = Field(default_factory=EvaluationSettings)
+    security: SecuritySettings = Field(default_factory=SecuritySettings)
 
     @model_validator(mode="after")
     def validate_production_providers(self) -> AppSettings:
@@ -157,6 +200,12 @@ class AppSettings(BaseSettings):
             if fake_providers:
                 joined = ", ".join(fake_providers)
                 msg = f"Production environment cannot use fake providers: {joined}"
+                raise ValueError(msg)
+            if _is_placeholder_secret(self.security.api_key):
+                msg = "Production environment requires EBRAG_SECURITY__API_KEY"
+                raise ValueError(msg)
+            if "*" in self.security.cors_origin_list:
+                msg = "Production environment cannot use wildcard CORS origins"
                 raise ValueError(msg)
         return self
 

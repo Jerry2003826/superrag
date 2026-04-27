@@ -1,0 +1,21 @@
+services:
+  postgres:
+    ports: !reset []
+
+  opensearch:
+    ports: !reset []
+
+  qdrant:
+    ports: !reset []
+
+  neo4j:
+    ports: !reset []
+
+  minio:
+    ports: !reset []
+
+  redis:
+    ports: !reset []
+
+  grobid:
+    ports: !reset []

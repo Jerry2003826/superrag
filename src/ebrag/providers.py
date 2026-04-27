@@ -45,6 +45,13 @@ def _require_api_key(provider: str, api_key: str | None) -> str:
     raise ValueError(msg)
 
 
+def _require_setting(name: str, value: str | None) -> str:
+    if value:
+        return value
+    msg = f"{name} is required"
+    raise ValueError(msg)
+
+
 def build_structured_llm_client(settings: AppSettings | None = None) -> StructuredJSONClient:
     resolved = settings or load_settings()
     llm = resolved.llm
@@ -123,8 +130,12 @@ def build_object_store(settings: AppSettings | None = None) -> ObjectStore:
     if resolved.storage.object_store == "minio":
         return MinioStore(
             endpoint=resolved.services.minio_endpoint,
-            access_key=resolved.storage.minio_access_key,
-            secret_key=resolved.storage.minio_secret_key,
+            access_key=_require_setting(
+                "EBRAG_STORAGE__MINIO_ACCESS_KEY", resolved.storage.minio_access_key
+            ),
+            secret_key=_require_setting(
+                "EBRAG_STORAGE__MINIO_SECRET_KEY", resolved.storage.minio_secret_key
+            ),
             secure=resolved.storage.minio_secure,
         )
     msg = "S3 object store is not implemented in the single-node runtime"

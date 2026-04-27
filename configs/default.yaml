@@ -3,7 +3,7 @@ project:
   environment: dev
 
 database:
-  url: postgresql+psycopg://ebrag:ebrag@localhost:5432/ebrag
+  url: sqlite+pysqlite:///./ebrag-dev.sqlite3
 
 services:
   opensearch_url: http://localhost:9200
@@ -32,14 +32,27 @@ reranker:
   provider: simple
 
 storage:
-  object_store: minio
+  object_store: local
   raw_bucket: raw-documents
   parsed_bucket: parsed-documents
   page_image_bucket: page-images
-  minio_access_key: minio
-  minio_secret_key: minio123
+  minio_access_key:
+  minio_secret_key:
   minio_secure: false
   local_root: .local-object-store
+
+security:
+  api_key:
+  api_key_header: X-API-Key
+  cors_origins: http://127.0.0.1:3000,http://localhost:3000
+  cors_methods: GET,POST,OPTIONS
+  cors_headers: Content-Type,Authorization,X-API-Key
+  rate_limit_enabled: true
+  rate_limit_default: 120/minute
+  rate_limit_query: 30/minute
+  rate_limit_ingestion: 10/minute
+  rate_limit_admin: 5/hour
+  upload_max_bytes: 52428800
 
 parsing:
   prefer_xml: true
