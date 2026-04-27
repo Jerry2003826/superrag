@@ -5,11 +5,15 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from sqlalchemy import select
 
+from ebrag.db import models
 from ebrag.db import models as _models
 from ebrag.db.base import Base
-from ebrag.db.session import get_engine
+from ebrag.db.session import get_engine, session_scope
+from ebrag.indexing.build_indexes import build_indexes
 from ebrag.logging import configure_logging
+from ebrag.providers import build_indexers
 from ebrag.settings import load_settings
 
 _ = _models
@@ -20,6 +24,8 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+index_app = typer.Typer(help="Index maintenance commands.")
+app.add_typer(index_app, name="index")
 
 ConfigOption = Annotated[
     Path | None,
@@ -38,6 +44,40 @@ def init_db(config: ConfigOption = None) -> None:
     engine = get_engine(settings.database.url)
     Base.metadata.create_all(engine)
     console.print(f"Initialized database metadata for {settings.project.name}")
+
+
+@index_app.command("rebuild")
+def rebuild_indexes(
+    paper_id: Annotated[
+        str | None,
+        typer.Option("--paper-id", help="Only rebuild indexes for one paper id."),
+    ] = None,
+    config: ConfigOption = None,
+) -> None:
+    settings = load_settings(config)
+    with session_scope() as session:
+        chunk_query = select(models.Chunk)
+        span_query = select(models.EvidenceSpan)
+        result_query = select(models.Result)
+        if paper_id is not None:
+            chunk_query = chunk_query.where(models.Chunk.paper_id == paper_id)
+            span_query = span_query.where(models.EvidenceSpan.paper_id == paper_id)
+            result_query = result_query.where(models.Result.paper_id == paper_id)
+        opensearch_indexer, vector_indexer, graph_indexer = build_indexers(session, settings)
+        result = build_indexes(
+            chunks=list(session.scalars(chunk_query)),
+            evidence_spans=list(session.scalars(span_query)),
+            results=list(session.scalars(result_query)),
+            opensearch_indexer=opensearch_indexer,
+            vector_indexer=vector_indexer,
+            graph_indexer=graph_indexer,
+        )
+    console.print(
+        "Rebuilt indexes: "
+        f"{result.lexical_documents} lexical documents, "
+        f"{result.vector_points} vector points, "
+        f"{result.graph_edges} graph edges"
+    )
 
 
 if __name__ == "__main__":

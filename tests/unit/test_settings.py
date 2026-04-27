@@ -31,3 +31,28 @@ def test_environment_overrides_yaml_config(monkeypatch: pytest.MonkeyPatch, tmp_
         load_settings.cache_clear()
 
     assert settings.database.url == "sqlite+pysqlite:///override.db"
+
+
+def test_production_rejects_fake_runtime_providers(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config_path = tmp_path / "settings.yaml"
+    config_path.write_text(
+        "project:\n"
+        "  environment: prod\n"
+        "llm:\n"
+        "  provider: fake\n"
+        "embedding:\n"
+        "  provider: fake\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("EBRAG_PROJECT__ENVIRONMENT", raising=False)
+    monkeypatch.delenv("EBRAG_LLM__PROVIDER", raising=False)
+    monkeypatch.delenv("EBRAG_EMBEDDING__PROVIDER", raising=False)
+
+    load_settings.cache_clear()
+    try:
+        with pytest.raises(ValueError, match="Production environment cannot use fake providers"):
+            load_settings(config_path)
+    finally:
+        load_settings.cache_clear()

@@ -1,106 +1,63 @@
 # Evidence Bio RAG
 
-Evidence Bio RAG 是一个面向生物医学系统综述的证据约束 RAG 后端。
+Evidence Bio RAG 是一个面向生物医学文献综述的证据约束 RAG 系统。它不会只让模型“凭感觉回答”，而是把回答绑定到论文、研究、证据片段、结构化结果和引用上，并在最终输出前做证据充分性、引用、数字声明和范围检查。
 
-它的目标不是直接“凭模型回答”，而是把每个结论绑定到可追溯的证据对象：论文、研究、证据片段、结构化结果和引用。最终回答会经过证据充分性、引用、数字声明和范围检查，尽量避免 unsupported claim、uncited numeric claim 和 wrong-scope claim。
+当前版本已经从 fake-backed 骨架升级为可用的单机 Docker Compose 版本：FastAPI 后端、React 前端、Postgres、OpenSearch、Qdrant、MinIO、Redis、Neo4j 和 GROBID 可以一起启动。fake provider 仍保留给测试和离线开发，生产环境请显式配置真实 LLM 与 embedding provider。
 
-## 当前状态
+## 功能
 
-当前仓库已经具备一个可本地运行的后端闭环骨架：
-
-- FastAPI API 服务
-- Postgres 数据库和 Alembic 迁移
-- Docker Compose 本地基础设施
-- 文献注册、去重、审计日志
-- JATS/GROBID 解析基础路径
-- 单篇论文结构化抽取流程
-- 数字一致性检查和外键引用校验
-- 结构化检索、证据包、sufficiency gate
-- fake-backed lexical/vector/rerank/synthesis/verifier 流程
-- 人审队列、评测入口和 GitHub Actions CI
-
-还没有接入生产级真实 LLM、真实 embedding 模型、真实 reranker 和完整前端，所以它现在更适合做本地开发、流程验证和后续功能扩展。
+- 文献注册、去重和审计日志
+- JATS XML、PDF、TEXT 文档上传
+- MinIO 原文对象存储
+- 解析结果、chunks、evidence spans 持久化
+- 真实 OpenSearch lexical index 写入和查询
+- 真实 Qdrant vector collection 写入和查询
+- OpenAI-compatible、Anthropic Claude、Google Gemini 结构化 JSON LLM adapter
+- sentence-transformers embedding adapter
+- 单篇论文结构化抽取和 evidence span 外键校验
+- evidence pack、sufficiency gate、综合回答和 verification
+- `ebrag index rebuild` CLI 与 `POST /index/rebuild`
+- React 前端：文献注册、上传、抽取、查询和证据预览
 
 ## 环境要求
 
-- Windows + PowerShell
 - Docker Desktop
 - Python 3.11+
+- Node.js 20+（只在本地开发前端时需要）
 - Git
 
-建议所有命令都在仓库根目录运行：
+建议在仓库根目录运行命令：
 
 ```powershell
 cd "E:\super rag\evidence-bio-rag"
 ```
 
-## 首次安装
+## 快速启动
 
-创建并安装 Python 环境：
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
-```
-
-本地直接运行时建议显式设置 `PYTHONPATH`，避免 import 到旧的 editable install：
+复制配置模板：
 
 ```powershell
-$env:PYTHONPATH = "src"
+Copy-Item .env.example .env
 ```
 
-## 启动本地服务
-
-先启动 Docker Desktop，然后启动基础设施：
+启动完整本地栈：
 
 ```powershell
-docker compose up -d
+docker compose up -d --build
 ```
 
-查看容器状态：
+首次启动会自动运行 Alembic migration。服务地址：
 
-```powershell
-docker compose ps
-```
-
-本地服务地址：
-
-| 服务 | 地址 | 说明 |
-| --- | --- | --- |
-| API | http://127.0.0.1:8000 | FastAPI 后端 |
-| API docs | http://127.0.0.1:8000/docs | 交互式接口文档 |
-| Postgres | localhost:5432 | `ebrag / ebrag` |
-| OpenSearch | http://localhost:9200 | 本地无鉴权单节点 |
-| Qdrant | http://localhost:6333 | 向量库 |
-| Neo4j | http://localhost:7474 | `neo4j / password` |
-| MinIO | http://localhost:9001 | `minio / minio123` |
-| Redis | localhost:6379 | 队列/缓存 |
-| GROBID | http://localhost:8070 | PDF/文献解析服务 |
-
-## 初始化数据库
-
-使用 Alembic 跑迁移：
-
-```powershell
-$env:PYTHONPATH = "src"
-python -m alembic upgrade head
-```
-
-如需回滚本地库：
-
-```powershell
-$env:PYTHONPATH = "src"
-python -m alembic downgrade base
-```
-
-## 启动 API
-
-```powershell
-$env:PYTHONPATH = "src"
-python -m uvicorn ebrag.api.app:app --host 127.0.0.1 --port 8000
-```
+| 服务 | 地址 |
+| --- | --- |
+| 前端 | http://127.0.0.1:3000 |
+| API | http://127.0.0.1:8000 |
+| API docs | http://127.0.0.1:8000/docs |
+| OpenSearch | http://127.0.0.1:9200 |
+| Qdrant | http://127.0.0.1:6333 |
+| MinIO Console | http://127.0.0.1:9001 |
+| Neo4j Browser | http://127.0.0.1:7474 |
+| GROBID | http://127.0.0.1:8070 |
 
 健康检查：
 
@@ -108,31 +65,99 @@ python -m uvicorn ebrag.api.app:app --host 127.0.0.1 --port 8000
 Invoke-RestMethod http://127.0.0.1:8000/health
 ```
 
-预期返回：
+停止服务：
 
-```json
-{
-  "status": "ok"
-}
+```powershell
+docker compose down
 ```
 
-然后打开：
+连数据卷一起删除：
 
-```text
-http://127.0.0.1:8000/docs
+```powershell
+docker compose down -v
 ```
 
-## 最小使用流程
+## Provider 配置
 
-### 1. 注册论文
+开发和测试默认使用 fake provider：
 
-接口：
-
-```text
-POST /papers/register
+```env
+EBRAG_PROJECT__ENVIRONMENT=dev
+EBRAG_LLM__PROVIDER=fake
+EBRAG_EMBEDDING__PROVIDER=fake
 ```
 
-PowerShell 示例：
+生产环境不要使用 fake。设置 `EBRAG_PROJECT__ENVIRONMENT=prod` 后，如果 LLM 或 embedding 仍是 fake，应用会拒绝启动。
+
+OpenAI-compatible 示例：
+
+```env
+EBRAG_PROJECT__ENVIRONMENT=prod
+EBRAG_LLM__PROVIDER=openai
+EBRAG_LLM__API_KEY=sk-...
+EBRAG_LLM__MODEL=gpt-4o-mini
+EBRAG_LLM__BASE_URL=https://api.openai.com/v1
+EBRAG_EMBEDDING__PROVIDER=sentence_transformers
+EBRAG_EMBEDDING__MODEL=BAAI/bge-small-en-v1.5
+EBRAG_VECTOR__COLLECTION=evidence_spans
+```
+
+Anthropic 示例：
+
+```env
+EBRAG_LLM__PROVIDER=anthropic
+EBRAG_LLM__API_KEY=sk-ant-...
+EBRAG_LLM__MODEL=claude-3-5-sonnet-latest
+```
+
+Google Gemini 示例：
+
+```env
+EBRAG_LLM__PROVIDER=google
+EBRAG_LLM__API_KEY=...
+EBRAG_LLM__MODEL=gemini-1.5-pro
+```
+
+## 本地开发
+
+安装 Python 依赖：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+$env:PYTHONPATH = "src"
+```
+
+启动 API：
+
+```powershell
+python -m alembic upgrade head
+python -m uvicorn ebrag.api.app:app --host 127.0.0.1 --port 8000
+```
+
+启动前端开发服务器：
+
+```powershell
+cd frontend
+npm install
+$env:VITE_API_BASE_URL = "http://127.0.0.1:8000"
+npm run dev
+```
+
+## 使用流程
+
+1. 打开前端 `http://127.0.0.1:3000`。
+2. 注册一篇论文，得到 `paper_id` 和 `study_id`。
+3. 上传 JATS XML、PDF 或 TXT 文档。
+4. 系统会把原文写入 MinIO，解析文档，保存 chunks/evidence spans，并写入 OpenSearch 与 Qdrant。
+5. 运行抽取。fake provider 下前端会提交一份示例结构化抽取；真实 provider 下可以直接让后端调用配置的 LLM。
+6. 输入问题，调用 `/query/full`，查看带 result ids 和 evidence span ids 的回答。
+
+## API 示例
+
+注册论文：
 
 ```powershell
 $paper = @{
@@ -153,209 +178,66 @@ Invoke-RestMethod `
   -ContentType "application/json"
 ```
 
-返回示例：
+上传 TXT 文档：
 
-```json
-{
-  "paper_id": "P00000001",
-  "study_id": "S00000001",
-  "report_id": "REP00000001",
-  "duplicate_kind": null
+```powershell
+$form = @{
+  source_format = "TEXT"
+  document_id = "demo.txt"
+  file = Get-Item ".\demo.txt"
 }
+
+Invoke-RestMethod `
+  -Uri "http://127.0.0.1:8000/papers/P00000001/documents" `
+  -Method Post `
+  -Form $form
 ```
 
-### 2. 解析论文
-
-接口：
-
-```text
-POST /papers/{paper_id}/parse
-```
-
-当前解析路由支持 JATS XML 优先，失败时走 GROBID fallback。最方便的方式是在 `http://127.0.0.1:8000/docs` 里直接填入请求体测试。
-
-### 3. 跑结构化抽取
-
-接口：
-
-```text
-POST /extraction/{paper_id}/run
-```
-
-当前抽取器使用 `FakeLLMClient`，所以请求里需要传入模拟的 LLM 输出：
-
-```json
-{
-  "llm_output": {
-    "paper_id": "P00000001",
-    "extraction_status": "unverified",
-    "results": [
-      {
-        "result_id": "R00000001",
-        "study_id": "S00000001",
-        "paper_id": "P00000001",
-        "study_type": "animal",
-        "population_or_model": "APP/PS1 mouse model",
-        "species": "mouse",
-        "cell_line": null,
-        "intervention": "Compound X",
-        "comparator": "vehicle",
-        "outcome": "IL-6",
-        "assay": "ELISA",
-        "direction": "decreased",
-        "effect_size": "32%",
-        "p_value": "p=0.01",
-        "confidence_interval": null,
-        "sample_size": "n=12",
-        "dose": "10 mg/kg",
-        "duration": "8 weeks",
-        "unit": "pg/mL",
-        "scope": "animal",
-        "evidence_span_id": "E00000001",
-        "extraction_status": "unverified"
-      }
-    ]
-  }
-}
-```
-
-注意：`paper_id`、`study_id` 和 `evidence_span_id` 必须已经存在并且互相匹配。未知证据片段会被拒绝，不会写入无效外键。
-
-### 4. 查询证据包
-
-接口：
-
-```text
-POST /query/evidence-pack
-```
-
-请求示例：
-
-```json
-{
-  "query": "Does Compound X reduce IL-6?",
-  "query_scope": "animal"
-}
-```
-
-它会返回一个 evidence pack，包括结构化结果、证据片段、检索分数和 sufficiency 状态。
-
-### 5. 跑完整问答闭环
-
-接口：
-
-```text
-POST /query/full
-```
-
-请求示例：
-
-```json
-{
-  "query": "Does Compound X reduce IL-6?",
-  "query_scope": "animal"
-}
-```
-
-返回内容包含：
-
-- `abstained`
-- `block_reasons`
-- `sufficiency`
-- `answer`
-- `claims`
-- `verification`
-
-如果证据不足或验证失败，最终 gate 会阻止不可靠回答。
-
-### 6. 查看人审队列
-
-接口：
-
-```text
-GET /review/queue
-```
-
-用于查看需要人工复核的 study report。
-
-### 7. 跑评测
-
-接口：
-
-```text
-POST /eval/run-gold
-```
-
-用于传入 gold cases 和 predictions，跑本地 regression/evaluation gate。
-
-## 常用开发命令
-
-运行测试：
+重建索引：
 
 ```powershell
-$env:PYTHONPATH = "src"
-python -m pytest
+Invoke-RestMethod `
+  -Uri "http://127.0.0.1:8000/index/rebuild" `
+  -Method Post `
+  -Body '{"paper_id":"P00000001"}' `
+  -ContentType "application/json"
 ```
 
-运行 lint：
+查询完整回答：
 
 ```powershell
-$env:PYTHONPATH = "src"
-python -m ruff check .
-```
-
-运行类型检查：
-
-```powershell
-$env:PYTHONPATH = "src"
-python -m mypy
-```
-
-检查 Docker Compose 配置：
-
-```powershell
-docker compose config --quiet
-```
-
-停止容器：
-
-```powershell
-docker compose down
-```
-
-连数据卷一起删除：
-
-```powershell
-docker compose down -v
+Invoke-RestMethod `
+  -Uri "http://127.0.0.1:8000/query/full" `
+  -Method Post `
+  -Body '{"query":"Does Compound X reduce IL-6?","query_scope":"animal"}' `
+  -ContentType "application/json"
 ```
 
 ## CLI
-
-当前 CLI 入口较少，主要用于初始化数据库元数据：
 
 ```powershell
 $env:PYTHONPATH = "src"
 python -m ebrag.cli --help
 python -m ebrag.cli init-db
+python -m ebrag.cli index rebuild
+python -m ebrag.cli index rebuild --paper-id P00000001
 ```
 
-日常试用建议优先使用 FastAPI docs：
+## 验证
 
-```text
-http://127.0.0.1:8000/docs
+```powershell
+$env:PYTHONPATH = "src"
+python -m pytest
+python -m ruff check .
+python -m mypy
+docker compose config --quiet
+cd frontend
+npm run build
 ```
 
-## 当前限制
+## 当前边界
 
-- API 查询链路里的 OpenSearch、vector、embedding、reranker、synthesis 和 LLM verifier 仍是 fake/mock 实现。
-- MinIO 存储接口还只是基础占位，没有完整对象存储工作流。
-- 真实 biomedical corpus ingestion、真实 PDF 批处理和大规模评测还没完成。
-- 还没有前端页面；当前主要通过 FastAPI docs 或 HTTP 调用使用。
-
-## 推荐下一步
-
-1. 接入真实 LLM provider。
-2. 接入真实 embedding 模型和 Qdrant collection。
-3. 把 OpenSearch fake client 换成真实索引写入/查询。
-4. 完成 MinIO 原文/解析产物存储。
-5. 加一个简单前端或 notebook demo，让文献导入、抽取、查询更直观。
+- 第一版按私有/internal 单机部署处理，没有登录鉴权、多租户和计费。
+- reranker 暂时使用轻量本地融合/排序，后续可替换为 cross-encoder。
+- PDF 解析依赖 GROBID，复杂版式和 OCR 质量仍需要单独评估。
+- 真实 LLM 输出必须通过 Pydantic schema 校验；无法校验的输出不会写入无效外键数据。

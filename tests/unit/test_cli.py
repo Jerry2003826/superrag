@@ -10,3 +10,11 @@ def test_cli_help() -> None:
 
     assert result.exit_code == 0
     assert "init-db" in result.output
+    assert "index" in result.output
+
+
+def test_cli_index_rebuild_help() -> None:
+    result = CliRunner().invoke(app, ["index", "rebuild", "--help"])
+
+    assert result.exit_code == 0
+    assert "Usage:" in result.output
