@@ -1,0 +1,60 @@
+project:
+  name: evidence-bio-rag
+  environment: dev
+
+database:
+  url: postgresql+psycopg://ebrag:ebrag@localhost:5432/ebrag
+
+services:
+  opensearch_url: http://localhost:9200
+  qdrant_url: http://localhost:6333
+  neo4j_url: bolt://localhost:7687
+  minio_endpoint: localhost:9000
+  redis_url: redis://localhost:6379/0
+  grobid_url: http://localhost:8070
+
+storage:
+  object_store: minio
+  raw_bucket: raw-documents
+  parsed_bucket: parsed-documents
+  page_image_bucket: page-images
+
+parsing:
+  prefer_xml: true
+  enable_grobid: true
+  enable_docling: false
+  enable_marker: false
+  enable_mistral_ocr: false
+  enable_paddleocr: false
+  require_provenance: true
+  quarantine_on_missing_metadata: true
+
+screening:
+  active_learning_enabled: true
+  uncertain_threshold: 0.35
+  human_review_required_for_exclusion: true
+
+retrieval:
+  lexical_top_k: 100
+  vector_top_k: 100
+  graph_top_k: 100
+  rerank_top_k: 30
+  evidence_pack_max_results: 80
+  require_conflict_search: true
+
+synthesis:
+  allow_raw_chunk_synthesis: false
+  require_result_ids: true
+  require_evidence_span_ids: true
+  abstain_on_insufficient_evidence: true
+
+verification:
+  unsupported_claim_policy: block
+  numeric_claim_policy: block_if_uncited
+  wrong_scope_policy: block
+  high_risk_human_review: true
+
+evaluation:
+  final_unsupported_claim_target: 0
+  final_wrong_scope_target: 0
+  final_uncited_numeric_target: 0

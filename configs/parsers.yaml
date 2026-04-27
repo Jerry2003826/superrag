@@ -1,0 +1,18 @@
+parser_priority:
+  - jats
+  - grobid
+  - docling
+  - marker
+  - mistral_ocr
+  - paddleocr
+
+jats:
+  enabled: true
+
+grobid:
+  enabled: true
+  timeout_seconds: 60
+
+fallback:
+  quarantine_failed_parse: true
+  require_source_hash: true

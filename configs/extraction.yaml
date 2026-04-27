@@ -1,0 +1,5 @@
+extraction:
+  llm_provider: fake
+  require_evidence_span_ids: true
+  require_numeric_traceability: true
+  human_required_on_numeric_mismatch: true

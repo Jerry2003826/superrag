@@ -1,0 +1,6 @@
+evaluation:
+  gold_cases_path: tests/fixtures/gold_cases.jsonl
+  release_gate:
+    unsupported_claim_rate_final: 0
+    wrong_scope_rate_final: 0
+    uncited_numeric_claim_rate_final: 0

@@ -1,0 +1,1 @@
+"""Evidence-grounded synthesis package."""

@@ -1,0 +1,11 @@
+retrieval:
+  lexical_top_k: 100
+  vector_top_k: 100
+  graph_top_k: 100
+  rerank_top_k: 30
+  evidence_pack_max_results: 80
+  require_conflict_search: true
+
+sufficiency:
+  require_supporting_evidence: true
+  human_effect_requires_human_evidence: true
