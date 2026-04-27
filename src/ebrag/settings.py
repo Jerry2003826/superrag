@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -113,5 +114,7 @@ def _read_yaml_config(path: Path) -> dict[str, Any]:
 
 @lru_cache(maxsize=8)
 def load_settings(config_path: str | Path | None = None) -> AppSettings:
-    path = Path(config_path) if config_path is not None else Path("configs/default.yaml")
+    env_config_path = os.environ.get("EBRAG_CONFIG")
+    selected_path = config_path or env_config_path or "configs/default.yaml"
+    path = Path(selected_path)
     return AppSettings(**_read_yaml_config(path))

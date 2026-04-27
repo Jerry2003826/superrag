@@ -5,9 +5,11 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
+from ebrag.db import models as _models
 from ebrag.db.base import Base
 from ebrag.settings import load_settings
 
+_ = _models
 config = context.config
 
 if config.config_file_name is not None:
