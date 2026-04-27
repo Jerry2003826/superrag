@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from ebrag.db import models
 from ebrag.indexing.chunks import evidence_span_payload
@@ -22,6 +22,15 @@ class VectorIndexClient(Protocol):
         payload: dict[str, Any],
     ) -> None:
         """Upsert one vector point."""
+
+    def search(
+        self,
+        *,
+        collection_name: str,
+        vector: list[float],
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """Search vector points."""
 
 
 @dataclass(frozen=True)
@@ -46,9 +55,25 @@ class FakeVectorClient:
         payload: dict[str, Any],
     ) -> None:
         self.points.setdefault(collection_name, {})[point_id] = {
+            "point_id": point_id,
             "vector": vector,
             "payload": payload,
         }
+
+    def search(
+        self,
+        *,
+        collection_name: str,
+        vector: list[float],
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        points = list(self.points.get(collection_name, {}).values())
+
+        def score(point: dict[str, Any]) -> float:
+            point_vector = cast(list[float], point["vector"])
+            return sum(left * right for left, right in zip(vector, point_vector, strict=False))
+
+        return sorted(points, key=score, reverse=True)[:limit]
 
 
 @dataclass(frozen=True)
