@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from ebrag.schemas.evidence import EvidenceSpan
 from ebrag.schemas.extraction import ResultNode
 from ebrag.schemas.retrieval import EvidencePack
@@ -68,6 +70,29 @@ def test_synthesizer_abstains_when_insufficient() -> None:
 
     assert output.abstained
     assert output.reasons == ["none"]
+
+
+def test_synthesizer_accepts_nested_provider_synthesis_payload() -> None:
+    class NestedClient:
+        def synthesize_json(self, *, prompt: str, evidence_pack: EvidencePack) -> dict[str, Any]:
+            _ = prompt, evidence_pack
+            return {
+                "synthesis": {
+                    "sentences": [
+                        {
+                            "content": "Compound X reduced IL-6 in animal evidence.",
+                            "cited_result_ids": ["R00000001"],
+                            "cited_evidence_span_ids": ["E00000001"],
+                        }
+                    ]
+                }
+            }
+
+    output = Synthesizer(NestedClient()).synthesize(_pack())
+
+    assert output.answer_id == "answer-1"
+    assert output.sentences[0].text == "Compound X reduced IL-6 in animal evidence."
+    assert output.sentences[0].cited_evidence_span_ids == ["E00000001"]
 
 
 def test_scope_guard_blocks_overreach() -> None:

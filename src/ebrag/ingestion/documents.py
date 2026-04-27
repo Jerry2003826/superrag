@@ -19,6 +19,8 @@ class PersistedParsedDocument:
 def persist_parsed_document(
     session: Session,
     parsed: ParsedDocument,
+    *,
+    default_study_id: str | None = None,
 ) -> PersistedParsedDocument:
     parsed_model = models.ParsedDocument(
         parsed_id=generate_stable_id(session, models.ParsedDocument),
@@ -58,7 +60,7 @@ def persist_parsed_document(
         span_model = models.EvidenceSpan(
             evidence_span_id=generate_stable_id(session, models.EvidenceSpan),
             paper_id=parsed.paper_id,
-            study_id=span.study_id,
+            study_id=span.study_id or default_study_id,
             chunk_id=linked_chunk.chunk_id if linked_chunk is not None else None,
             source_format=span.source_format,
             parser_name=span.parser_name,

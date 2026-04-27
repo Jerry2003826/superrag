@@ -7,6 +7,7 @@ from ebrag.schemas.synthesis import AtomicClaim
 from ebrag.schemas.verification import VerificationVerdict
 from ebrag.verification.deterministic import verify_citation_ids
 from ebrag.verification.final_gate import run_final_gate
+from ebrag.verification.llm_verifier import StructuredLLMVerifier
 from ebrag.verification.numeric_verifier import verify_numeric_claim
 
 
@@ -99,3 +100,31 @@ def test_final_gate_blocks_unsupported_wrong_scope_and_uncited_numeric() -> None
     assert result.blocked
     assert result.abstained
     assert len(result.reasons) == 2
+
+
+def test_structured_llm_verifier_accepts_nested_provider_payload() -> None:
+    class NestedClient:
+        def verify_json(self, *, prompt: str) -> dict[str, object]:
+            _ = prompt
+            return {
+                "verification": {
+                    "verdict": "PARTIALLY SUPPORTED",
+                    "reason": "The cited evidence directly supports the claim.",
+                }
+            }
+
+    claim = AtomicClaim(
+        claim_id="CLM00000001",
+        text="Compound X reduced IL-6.",
+        cited_result_ids=["R00000001"],
+        cited_evidence_span_ids=["E00000001"],
+        claim_type="fact",
+    )
+
+    verdict = StructuredLLMVerifier(NestedClient()).verify(
+        claim,
+        "Compound X reduced IL-6 by 32% with p=0.01.",
+    )
+
+    assert verdict.claim_id == "CLM00000001"
+    assert verdict.verdict == "partially_supported"

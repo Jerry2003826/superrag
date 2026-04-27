@@ -70,8 +70,33 @@ class Synthesizer:
     def __init__(self, client: SynthesisClient) -> None:
         self.client = client
 
+    def _normalize_sentence(self, sentence: Any) -> Any:
+        if not isinstance(sentence, dict):
+            return sentence
+        normalized = dict(sentence)
+        content = normalized.pop("content", None)
+        if "text" not in normalized and isinstance(content, str):
+            normalized["text"] = content
+        return normalized
+
+    def _normalize_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        nested = payload.get("synthesis")
+        if isinstance(nested, dict):
+            payload = nested
+        payload.setdefault("answer_id", "answer-1")
+        payload.setdefault("abstained", False)
+        payload.setdefault("sentences", [])
+        payload.setdefault("reasons", [])
+        if isinstance(payload["sentences"], list):
+            payload["sentences"] = [
+                self._normalize_sentence(sentence) for sentence in payload["sentences"]
+            ]
+        return payload
+
     def synthesize(self, evidence_pack: EvidencePack) -> SynthesisOutput:
         prompt = build_synthesis_prompt(evidence_pack)
         return SynthesisOutput.model_validate(
-            self.client.synthesize_json(prompt=prompt, evidence_pack=evidence_pack)
+            self._normalize_payload(
+                self.client.synthesize_json(prompt=prompt, evidence_pack=evidence_pack)
+            )
         )

@@ -46,9 +46,9 @@ def test_production_rejects_fake_runtime_providers(
         "  provider: fake\n",
         encoding="utf-8",
     )
-    monkeypatch.delenv("EBRAG_PROJECT__ENVIRONMENT", raising=False)
-    monkeypatch.delenv("EBRAG_LLM__PROVIDER", raising=False)
-    monkeypatch.delenv("EBRAG_EMBEDDING__PROVIDER", raising=False)
+    monkeypatch.setenv("EBRAG_PROJECT__ENVIRONMENT", "prod")
+    monkeypatch.setenv("EBRAG_LLM__PROVIDER", "fake")
+    monkeypatch.setenv("EBRAG_EMBEDDING__PROVIDER", "fake")
 
     load_settings.cache_clear()
     try:

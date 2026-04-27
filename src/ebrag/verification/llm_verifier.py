@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 
 from ebrag.extraction.llm_client import StructuredJSONClient
 from ebrag.schemas.synthesis import AtomicClaim
@@ -26,6 +26,16 @@ class StructuredLLMVerifier:
     def __init__(self, client: StructuredJSONClient) -> None:
         self.client = client
 
+    def _normalize_payload(self, payload: dict[str, Any], claim_id: str) -> dict[str, Any]:
+        nested = payload.get("verification")
+        if isinstance(nested, dict):
+            payload = nested
+        payload.setdefault("claim_id", claim_id)
+        verdict = payload.get("verdict")
+        if isinstance(verdict, str):
+            payload["verdict"] = verdict.lower().strip().replace("-", "_").replace(" ", "_")
+        return payload
+
     def verify(self, claim: AtomicClaim, evidence_text: str) -> VerificationVerdict:
         payload = self.client.verify_json(
             prompt=(
@@ -36,5 +46,6 @@ class StructuredLLMVerifier:
                 f"evidence:\n{evidence_text}"
             )
         )
-        payload.setdefault("claim_id", claim.claim_id)
-        return VerificationVerdict.model_validate(payload)
+        return VerificationVerdict.model_validate(
+            self._normalize_payload(payload, claim.claim_id)
+        )

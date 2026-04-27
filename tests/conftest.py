@@ -9,8 +9,21 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from ebrag.db import models as _models
 from ebrag.db.base import Base
+from ebrag.settings import load_settings
 
 _ = _models
+
+
+@pytest.fixture(autouse=True)
+def isolate_runtime_settings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    monkeypatch.setenv("EBRAG_PROJECT__ENVIRONMENT", "dev")
+    monkeypatch.setenv("EBRAG_LLM__PROVIDER", "fake")
+    monkeypatch.setenv("EBRAG_EMBEDDING__PROVIDER", "fake")
+    load_settings.cache_clear()
+    try:
+        yield
+    finally:
+        load_settings.cache_clear()
 
 
 @pytest.fixture()

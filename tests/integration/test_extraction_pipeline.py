@@ -84,6 +84,40 @@ def test_single_paper_extractor_marks_numeric_mismatch_human_required(
     assert output.results[0].extraction_status == "human_required"
 
 
+def test_single_paper_extractor_normalizes_provider_fact_shape(
+    db_session: Session,
+) -> None:
+    paper, study, span = _seed_paper_with_evidence(
+        db_session,
+        title="Compound X provider fact shape",
+        evidence_text="APP/PS1 mice received Compound X; IL-6 decreased by 32%.",
+    )
+    llm_output = {
+        "results": [
+            {
+                "subject": "Compound X",
+                "predicate": "decreases",
+                "object": "IL-6",
+                "value": "32%",
+                "context": "APP/PS1 mice",
+                "evidence_span_ids": [span.evidence_span_id],
+            }
+        ]
+    }
+
+    output = SinglePaperExtractor(
+        session=db_session,
+        llm_client=FakeLLMClient({paper.paper_id: llm_output}),
+    ).run(paper.paper_id)
+
+    assert output.results[0].study_id == study.study_id
+    assert output.results[0].evidence_span_id == span.evidence_span_id
+    assert output.results[0].intervention == "Compound X"
+    assert output.results[0].outcome == "IL-6"
+    assert output.results[0].direction == "decreased"
+    assert output.results[0].scope == "animal"
+
+
 def test_single_paper_extractor_rejects_unknown_evidence_span_before_persisting(
     db_session: Session,
 ) -> None:

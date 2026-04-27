@@ -21,7 +21,10 @@ class ExtractionReferenceError(ValueError):
 
 def build_paper_context(evidence_spans: list[models.EvidenceSpan]) -> str:
     return "\n".join(
-        f"[{span.evidence_span_id}] {span.section or 'Unknown section'}: {span.text}"
+        (
+            f"[{span.evidence_span_id}] study_id={span.study_id or 'unknown'} "
+            f"{span.section or 'Unknown section'}: {span.text}"
+        )
         for span in evidence_spans
     )
 
@@ -97,11 +100,16 @@ class SinglePaperExtractor:
         )
         context = build_paper_context(evidence_spans)
         prompt = build_single_paper_extraction_prompt(paper_id=paper_id, paper_context=context)
+        span_by_id = _evidence_by_id(evidence_spans)
         extracted = validate_extraction_json(
-            self.llm_client.complete_json(prompt=prompt, paper_id=paper_id)
+            self.llm_client.complete_json(prompt=prompt, paper_id=paper_id),
+            paper_id=paper_id,
+            study_id_by_span={
+                span.evidence_span_id: span.study_id for span in span_by_id.values()
+                if span.study_id is not None
+            },
         )
 
-        span_by_id = _evidence_by_id(evidence_spans)
         study_ids = set(self.session.scalars(select(models.Study.study_id)).all())
         _validate_extraction_references(
             paper_id=paper_id,

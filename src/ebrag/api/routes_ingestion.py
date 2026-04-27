@@ -3,11 +3,17 @@ from __future__ import annotations
 from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ebrag.db import models
 from ebrag.db.session import get_session
 from ebrag.extraction.llm_client import FakeLLMClient
-from ebrag.extraction.single_paper_extractor import SinglePaperExtractor
+from ebrag.extraction.single_paper_extractor import (
+    ExtractionReferenceError,
+    SinglePaperExtractor,
+)
 from ebrag.indexing.build_indexes import build_indexes
 from ebrag.ingestion.documents import persist_parsed_document
 from ebrag.ingestion.registry import LiteratureRegistry, PaperMetadataRow
@@ -92,7 +98,14 @@ async def upload_document(
         parsed_key,
         parsed.model_dump_json().encode("utf-8"),
     )
-    persisted = persist_parsed_document(session, parsed)
+    default_study_id = session.scalar(
+        select(models.StudyReport.study_id).where(models.StudyReport.paper_id == paper_id)
+    )
+    persisted = persist_parsed_document(
+        session,
+        parsed,
+        default_study_id=default_study_id,
+    )
     opensearch_indexer, vector_indexer, graph_indexer = build_indexers(session)
     index_result = build_indexes(
         chunks=persisted.chunks,
@@ -134,8 +147,13 @@ def run_extraction(
         if isinstance(llm_output, dict)
         else build_extraction_client()
     )
-    output = SinglePaperExtractor(
-        session=session,
-        llm_client=llm_client,
-    ).run(paper_id)
+    try:
+        output = SinglePaperExtractor(
+            session=session,
+            llm_client=llm_client,
+        ).run(paper_id)
+    except ExtractionReferenceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors(include_url=False)) from exc
     return output.model_dump()
