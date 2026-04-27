@@ -10,8 +10,8 @@ class MinioStore:
         self,
         endpoint: str,
         *,
-        access_key: str = "minio",
-        secret_key: str = "minio123",
+        access_key: str,
+        secret_key: str,
         secure: bool = False,
         client: Any | None = None,
     ) -> None:

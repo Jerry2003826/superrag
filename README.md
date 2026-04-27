@@ -280,6 +280,8 @@ npm run build
 ## 当前边界
 
 - 第一版按私有/internal 单机部署处理，使用部署级 API Key，不包含多用户登录、多租户和计费。
-- reranker 暂时使用轻量本地融合/排序，后续可替换为 cross-encoder。
+- 当前稳定 ID 生成逻辑面向单机/单 worker；多 worker 高并发写入时应迁移到 PostgreSQL sequence 或等价的数据库侧 ID 分配。
+- Graph retrieval 当前使用已建图关系做召回，尚未用 query 做图库语义过滤；接入真实图库检索时需要补 query-aware traversal/search。
+- reranker 暂时使用轻量本地融合/排序，后续可替换为 Cohere、BGE cross-encoder 或其他 rerank provider。
 - PDF 解析依赖 GROBID，复杂版式和 OCR 质量仍需要单独评估。
 - 真实 LLM 输出必须通过 Pydantic schema 校验；无法校验的输出不会写入无效外键数据。

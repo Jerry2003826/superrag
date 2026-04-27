@@ -531,6 +531,13 @@ docker compose logs api --tail=200
 
 首次运行真实 embedding 时，模型需要加载权重；首次 Docker build 也会下载较大的 ML 依赖。后续查询通常会更快。
 
+## 当前技术边界
+
+- 当前稳定 ID 生成逻辑面向单机/单 worker；多 worker 高并发写入时，应迁移到 PostgreSQL sequence 或等价的数据库侧 ID 分配。
+- Graph retrieval 当前使用已建图关系做召回，尚未用 query 做图库语义过滤；接入真实图库检索时需要补 query-aware traversal/search。
+- reranker 暂时使用轻量本地融合/排序，后续可替换为 Cohere、BGE cross-encoder 或其他 rerank provider。
+- MinIO 连接必须从 `.env` 注入账号密码，代码路径不会使用内置默认密码。
+
 ## 交付验收清单
 
 交付或演示前建议确认：
