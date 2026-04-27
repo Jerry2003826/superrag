@@ -46,7 +46,7 @@ dependencies = [
 [project.optional-dependencies]
 eval = ["ragas>=0.1"]
 ocr = ["pypdf>=4.0", "pdfplumber>=0.11"]
-dev = ["ipython", "jupyter", "pre-commit", "types-PyYAML"]
+dev = ["ipython", "jupyter", "pre-commit", "types-PyYAML", "lxml-stubs"]
 
 [project.scripts]
 ebrag = "ebrag.cli:app"
