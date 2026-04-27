@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<article article-type="research-article">
+  <front>
+    <article-meta>
+      <title-group>
+        <article-title>Compound X reduces IL-6 in AD mouse models</article-title>
+      </title-group>
+      <abstract>
+        <p>Compound X reduced IL-6 in APP/PS1 mice compared with vehicle.</p>
+      </abstract>
+    </article-meta>
+  </front>
+  <body>
+    <sec>
+      <title>Methods</title>
+      <p>APP/PS1 mice received Compound X at 10 mg/kg for 8 weeks.</p>
+    </sec>
+    <sec>
+      <title>Results</title>
+      <p>IL-6 decreased by 32% after Compound X treatment.</p>
+    </sec>
+    <fig>
+      <label>Figure 1</label>
+      <caption><p>IL-6 quantification in mouse cortex.</p></caption>
+    </fig>
+    <table-wrap>
+      <label>Table 1</label>
+      <caption><p>Summary of cytokine outcomes.</p></caption>
+    </table-wrap>
+  </body>
+  <back>
+    <ref-list>
+      <ref id="R1"><mixed-citation>Smith et al. Cytokines. 2024.</mixed-citation></ref>
+    </ref-list>
+  </back>
+</article>

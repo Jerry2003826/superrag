@@ -1,0 +1,62 @@
+{
+  "P00000001": {
+    "paper_id": "P00000001",
+    "extraction_status": "unverified",
+    "results": [
+      {
+        "result_id": "R00000001",
+        "study_id": "S00000001",
+        "paper_id": "P00000001",
+        "study_type": "animal",
+        "population_or_model": "APP/PS1 mouse model",
+        "species": "mouse",
+        "cell_line": null,
+        "intervention": "Compound X",
+        "comparator": "vehicle",
+        "outcome": "IL-6",
+        "assay": "ELISA",
+        "direction": "decreased",
+        "effect_size": "32%",
+        "p_value": "p=0.01",
+        "confidence_interval": null,
+        "sample_size": "n=12",
+        "dose": "10 mg/kg",
+        "duration": "8 weeks",
+        "unit": "pg/mL",
+        "scope": "animal",
+        "evidence_span_id": "E00000001",
+        "extraction_status": "unverified"
+      }
+    ]
+  },
+  "P00000002": {
+    "paper_id": "P00000002",
+    "extraction_status": "unverified",
+    "results": [
+      {
+        "result_id": "R00000001",
+        "study_id": "S00000002",
+        "paper_id": "P00000002",
+        "study_type": "animal",
+        "population_or_model": "APP/PS1 mouse model",
+        "species": "mouse",
+        "cell_line": null,
+        "intervention": "Compound X",
+        "comparator": "vehicle",
+        "outcome": "IL-6",
+        "assay": "ELISA",
+        "direction": "decreased",
+        "effect_size": "32%",
+        "p_value": "p=0.99",
+        "confidence_interval": null,
+        "sample_size": "n=999",
+        "dose": "99 mg/kg",
+        "duration": "8 weeks",
+        "unit": "pg/mL",
+        "scope": "animal",
+        "evidence_span_id": "E00000002",
+        "extraction_status": "unverified"
+      }
+    ]
+  }
+}

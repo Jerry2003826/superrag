@@ -1,0 +1,2 @@
+{"case_id":"case-1","query":"Does compound X reduce IL-6?","expected_result_ids":["R00000001"],"expected_evidence_span_ids":["E00000001"],"expected_conflict_result_ids":[]}
+{"case_id":"case-2","query":"Are there conflicting animal results?","expected_result_ids":["R00000002"],"expected_evidence_span_ids":["E00000002"],"expected_conflict_result_ids":["R00000003"]}
