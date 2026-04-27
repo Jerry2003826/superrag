@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ebrag.schemas.ids import StableId
 
-SourceFormat = Literal["JATS_XML", "PDF", "PDF_OCR", "SUPPLEMENT", "UNKNOWN"]
+SourceFormat = Literal["JATS_XML", "PDF", "PDF_OCR", "SUPPLEMENT", "TEXT", "UNKNOWN"]
 
 
 class BoundingBox(BaseModel):

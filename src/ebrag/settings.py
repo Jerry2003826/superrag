@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
@@ -44,11 +44,37 @@ class ServicesSettings(BaseModel):
     grobid_url: str = "http://localhost:8070"
 
 
+class LLMSettings(BaseModel):
+    provider: Literal["fake", "openai", "anthropic", "google"] = "fake"
+    api_key: str | None = None
+    model: str = "gpt-4o-mini"
+    base_url: str = "https://api.openai.com/v1"
+    timeout_seconds: float = Field(default=60.0, gt=0)
+    max_retries: int = Field(default=2, ge=0)
+
+
+class EmbeddingSettings(BaseModel):
+    provider: Literal["fake", "sentence_transformers"] = "fake"
+    model: str = "BAAI/bge-small-en-v1.5"
+
+
+class VectorSettings(BaseModel):
+    collection: str = "evidence_spans"
+
+
+class RerankerSettings(BaseModel):
+    provider: Literal["simple"] = "simple"
+
+
 class StorageSettings(BaseModel):
     object_store: Literal["minio", "s3", "local"] = "minio"
     raw_bucket: str = "raw-documents"
     parsed_bucket: str = "parsed-documents"
     page_image_bucket: str = "page-images"
+    minio_access_key: str = "minio"
+    minio_secret_key: str = "minio123"
+    minio_secure: bool = False
+    local_root: str = ".local-object-store"
 
 
 class ParsingSettings(BaseModel):
@@ -108,6 +134,10 @@ class AppSettings(BaseSettings):
     project: ProjectSettings = Field(default_factory=ProjectSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     services: ServicesSettings = Field(default_factory=ServicesSettings)
+    llm: LLMSettings = Field(default_factory=LLMSettings)
+    embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
+    vector: VectorSettings = Field(default_factory=VectorSettings)
+    reranker: RerankerSettings = Field(default_factory=RerankerSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
     parsing: ParsingSettings = Field(default_factory=ParsingSettings)
     screening: ScreeningSettings = Field(default_factory=ScreeningSettings)
@@ -115,6 +145,20 @@ class AppSettings(BaseSettings):
     synthesis: SynthesisSettings = Field(default_factory=SynthesisSettings)
     verification: VerificationSettings = Field(default_factory=VerificationSettings)
     evaluation: EvaluationSettings = Field(default_factory=EvaluationSettings)
+
+    @model_validator(mode="after")
+    def validate_production_providers(self) -> AppSettings:
+        if self.project.environment.lower() in {"prod", "production"}:
+            fake_providers = []
+            if self.llm.provider == "fake":
+                fake_providers.append("llm")
+            if self.embedding.provider == "fake":
+                fake_providers.append("embedding")
+            if fake_providers:
+                joined = ", ".join(fake_providers)
+                msg = f"Production environment cannot use fake providers: {joined}"
+                raise ValueError(msg)
+        return self
 
     @classmethod
     def settings_customise_sources(
