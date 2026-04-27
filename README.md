@@ -4,6 +4,10 @@ Evidence Bio RAG 是一个面向生物医学文献综述的证据约束 RAG 系�
 
 当前版本已经从 fake-backed 骨架升级为可用的单机 Docker Compose 版本：FastAPI 后端、React 前端、Postgres、OpenSearch、Qdrant、MinIO、Redis、Neo4j 和 GROBID 可以一起启动。fake provider 仍保留给测试和离线开发，生产环境请显式配置真实 LLM 与 embedding provider。
 
+## 操作指南
+
+- [客户操作指南：导入文献、抽取证据、查询回答、批量导入与运维排错](docs/customer_operation_guide_zh.md)
+
 ## 功能
 
 - 文献注册、去重和审计日志
