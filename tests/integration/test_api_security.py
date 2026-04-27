@@ -10,12 +10,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from ebrag.api.app import create_app
-from ebrag.api.security import public_error_detail
+from ebrag.api.security import InMemoryRateLimitMiddleware, _RateBucket, public_error_detail
 from ebrag.db import models as _models
 from ebrag.db.base import Base
 from ebrag.db.session import get_session
 from ebrag.providers import build_object_store
-from ebrag.settings import load_settings
+from ebrag.settings import SecuritySettings, load_settings
 from ebrag.storage.local_store import LocalStore
 
 _ = _models
@@ -94,6 +94,24 @@ def test_rate_limit_returns_429(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert first.status_code != 429
     assert second.status_code == 429
+
+
+def test_rate_limit_prunes_expired_buckets() -> None:
+    async def app(scope: object, receive: object, send: object) -> None:
+        _ = scope, receive, send
+
+    middleware = InMemoryRateLimitMiddleware(
+        app,
+        settings=SecuritySettings(rate_limit_query="1/second"),
+    )
+    middleware._buckets[("old-client", "query")] = _RateBucket(started_at=0.0, count=1)
+    middleware._buckets[("fresh-client", "query")] = _RateBucket(started_at=1.5, count=1)
+    middleware._last_prune_at = 0.0
+
+    middleware._prune_expired_buckets(now=2.0)
+
+    assert ("old-client", "query") not in middleware._buckets
+    assert ("fresh-client", "query") in middleware._buckets
 
 
 def test_public_error_detail_redacts_in_production(monkeypatch: pytest.MonkeyPatch) -> None:

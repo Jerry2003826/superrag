@@ -110,6 +110,11 @@ class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
             "admin": _parse_limit(settings.rate_limit_admin),
         }
         self._buckets: dict[tuple[str, str], _RateBucket] = {}
+        self._last_prune_at = time.monotonic()
+        self._prune_interval_seconds = min(
+            60.0,
+            *(window_seconds for _, window_seconds in self._limits.values()),
+        )
         self._lock = threading.Lock()
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
@@ -121,6 +126,7 @@ class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
         key = (_client_key(request), bucket_name)
         now = time.monotonic()
         with self._lock:
+            self._prune_expired_buckets(now)
             bucket = self._buckets.get(key)
             if bucket is None or now - bucket.started_at >= window_seconds:
                 bucket = _RateBucket(started_at=now, count=0)
@@ -135,6 +141,18 @@ class InMemoryRateLimitMiddleware(BaseHTTPMiddleware):
                 )
 
         return await call_next(request)
+
+    def _prune_expired_buckets(self, now: float) -> None:
+        if now - self._last_prune_at < self._prune_interval_seconds:
+            return
+        expired_keys = [
+            key
+            for key, bucket in self._buckets.items()
+            if now - bucket.started_at >= self._limits[key[1]][1]
+        ]
+        for key in expired_keys:
+            del self._buckets[key]
+        self._last_prune_at = now
 
     @staticmethod
     def _bucket_name(path: str) -> str:

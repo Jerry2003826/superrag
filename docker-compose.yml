@@ -67,7 +67,7 @@ services:
     image: opensearchproject/opensearch:2
     environment:
       discovery.type: single-node
-      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_SECURITY_PLUGIN: ${OPENSEARCH_DISABLE_SECURITY_PLUGIN:-true}
       OPENSEARCH_JAVA_OPTS: "-Xms1g -Xmx1g"
     ports:
       - "127.0.0.1:${OPENSEARCH_PORT:-9200}:9200"
