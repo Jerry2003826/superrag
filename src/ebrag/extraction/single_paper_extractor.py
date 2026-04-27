@@ -15,6 +15,10 @@ from ebrag.extraction.schema_validator import validate_extraction_json
 from ebrag.schemas.extraction import ExtractionOutput, ResultNode
 
 
+class ExtractionReferenceError(ValueError):
+    """Raised when LLM output references entities outside the current extraction context."""
+
+
 def build_paper_context(evidence_spans: list[models.EvidenceSpan]) -> str:
     return "\n".join(
         f"[{span.evidence_span_id}] {span.section or 'Unknown section'}: {span.text}"
@@ -57,6 +61,29 @@ def _persist_result(
     )
 
 
+def _validate_extraction_references(
+    *,
+    paper_id: str,
+    results: list[ResultNode],
+    span_by_id: dict[str, models.EvidenceSpan],
+    study_ids: set[str],
+) -> None:
+    errors: list[str] = []
+    for result in results:
+        if result.paper_id != paper_id:
+            errors.append(f"{result.result_id} has paper_id={result.paper_id}, expected {paper_id}")
+        if result.study_id not in study_ids:
+            errors.append(f"{result.result_id} references unknown study_id={result.study_id}")
+        if result.evidence_span_id not in span_by_id:
+            errors.append(
+                f"{result.result_id} references unknown evidence_span_id={result.evidence_span_id}"
+            )
+
+    if errors:
+        msg = "Invalid extraction references: " + "; ".join(errors)
+        raise ExtractionReferenceError(msg)
+
+
 @dataclass(frozen=True)
 class SinglePaperExtractor:
     session: Session
@@ -75,6 +102,14 @@ class SinglePaperExtractor:
         )
 
         span_by_id = _evidence_by_id(evidence_spans)
+        study_ids = set(self.session.scalars(select(models.Study.study_id)).all())
+        _validate_extraction_references(
+            paper_id=paper_id,
+            results=extracted.results,
+            span_by_id=span_by_id,
+            study_ids=study_ids,
+        )
+
         persisted: list[models.Result] = []
         result_repository = ResultRepository(self.session)
         audit_repository = BaseRepository(self.session)

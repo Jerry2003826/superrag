@@ -1,13 +1,29 @@
 from __future__ import annotations
 
 import os
+from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal, cast
 
 import yaml
 from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic.fields import FieldInfo
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
+
+_YAML_SETTINGS: ContextVar[dict[str, Any] | None] = ContextVar(
+    "_YAML_SETTINGS", default=None
+)
+
+
+class YamlConfigSettingsSource(PydanticBaseSettingsSource):
+    def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
+        _ = field
+        yaml_settings = _YAML_SETTINGS.get() or {}
+        return yaml_settings.get(field_name), field_name, True
+
+    def __call__(self) -> dict[str, Any]:
+        return _YAML_SETTINGS.get() or {}
 
 
 class ProjectSettings(BaseModel):
@@ -100,6 +116,23 @@ class AppSettings(BaseSettings):
     verification: VerificationSettings = Field(default_factory=VerificationSettings)
     evaluation: EvaluationSettings = Field(default_factory=EvaluationSettings)
 
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            YamlConfigSettingsSource(settings_cls),
+            file_secret_settings,
+        )
+
 
 def _read_yaml_config(path: Path) -> dict[str, Any]:
     if not path.exists():
@@ -117,4 +150,8 @@ def load_settings(config_path: str | Path | None = None) -> AppSettings:
     env_config_path = os.environ.get("EBRAG_CONFIG")
     selected_path = config_path or env_config_path or "configs/default.yaml"
     path = Path(selected_path)
-    return AppSettings(**_read_yaml_config(path))
+    token = _YAML_SETTINGS.set(_read_yaml_config(path))
+    try:
+        return AppSettings()
+    finally:
+        _YAML_SETTINGS.reset(token)

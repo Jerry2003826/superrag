@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -81,3 +82,51 @@ def test_single_paper_extractor_marks_numeric_mismatch_human_required(
 
     assert output.extraction_status == "human_required"
     assert output.results[0].extraction_status == "human_required"
+
+
+def test_single_paper_extractor_rejects_unknown_evidence_span_before_persisting(
+    db_session: Session,
+) -> None:
+    paper, study, _span = _seed_paper_with_evidence(
+        db_session,
+        title="Compound X invalid evidence reference",
+        evidence_text="n=12 mice received 10 mg/kg Compound X; IL-6 decreased, p=0.01.",
+    )
+    llm_output = {
+        "paper_id": paper.paper_id,
+        "extraction_status": "unverified",
+        "results": [
+            {
+                "result_id": "R00000001",
+                "study_id": study.study_id,
+                "paper_id": paper.paper_id,
+                "study_type": "animal",
+                "population_or_model": "APP/PS1 mouse model",
+                "species": "mouse",
+                "cell_line": None,
+                "intervention": "Compound X",
+                "comparator": "vehicle",
+                "outcome": "IL-6",
+                "assay": "ELISA",
+                "direction": "decreased",
+                "effect_size": "32%",
+                "p_value": "p=0.01",
+                "confidence_interval": None,
+                "sample_size": "n=12",
+                "dose": "10 mg/kg",
+                "duration": "8 weeks",
+                "unit": "pg/mL",
+                "scope": "animal",
+                "evidence_span_id": "E99999999",
+                "extraction_status": "unverified",
+            }
+        ],
+    }
+
+    with pytest.raises(ValueError, match="unknown evidence_span_id=E99999999"):
+        SinglePaperExtractor(
+            session=db_session,
+            llm_client=FakeLLMClient({paper.paper_id: llm_output}),
+        ).run(paper.paper_id)
+
+    assert db_session.scalars(select(models.Result)).all() == []
