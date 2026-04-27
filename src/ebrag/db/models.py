@@ -77,6 +77,7 @@ class StudyReport(Base, TimestampMixin):
     report_type: Mapped[str] = mapped_column(String(64))
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     evidence: Mapped[str | None] = mapped_column(Text)
+    human_review_required: Mapped[bool] = mapped_column(Boolean, default=False)
 
     study: Mapped[Study] = relationship(back_populates="reports")
     paper: Mapped[Paper] = relationship(back_populates="reports")

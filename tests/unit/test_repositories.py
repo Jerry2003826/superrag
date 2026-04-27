@@ -32,6 +32,7 @@ def test_create_core_evidence_chain(db_session: Session) -> None:
         report_type="primary",
         confidence=1.0,
         evidence="registry import",
+        human_review_required=False,
     )
     span = evidence.create_span(
         paper_id=paper.paper_id,

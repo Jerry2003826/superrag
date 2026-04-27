@@ -191,6 +191,7 @@ class StudyReportRepository(BaseRepository):
         report_type: str,
         confidence: float,
         evidence: str | None,
+        human_review_required: bool = False,
     ) -> models.StudyReport:
         report = models.StudyReport(
             report_id=generate_stable_id(self.session, models.StudyReport),
@@ -199,6 +200,7 @@ class StudyReportRepository(BaseRepository):
             report_type=report_type,
             confidence=confidence,
             evidence=evidence,
+            human_review_required=human_review_required,
         )
         self.add(report)
         self.create_audit_log(
@@ -247,6 +249,49 @@ class EvidenceRepository(BaseRepository):
             source_hash=None,
         )
         return self.add(span)
+
+
+class ScreeningRepository(BaseRepository):
+    def create_decision(
+        self,
+        *,
+        paper_id: str,
+        level: str,
+        decision: str,
+        reviewer_type: str,
+        study_id: str | None = None,
+        reason_code: str | None = None,
+        reason_text: str | None = None,
+        evidence_span_id: str | None = None,
+        reviewer_id: str | None = None,
+        confidence: float | None = None,
+    ) -> models.ScreeningDecision:
+        screening_decision = models.ScreeningDecision(
+            decision_id=generate_stable_id(self.session, models.ScreeningDecision),
+            paper_id=paper_id,
+            study_id=study_id,
+            level=level,
+            decision=decision,
+            reason_code=reason_code,
+            reason_text=reason_text,
+            evidence_span_id=evidence_span_id,
+            reviewer_type=reviewer_type,
+            reviewer_id=reviewer_id,
+            confidence=confidence,
+        )
+        self.add(screening_decision)
+        self.create_audit_log(
+            action="screening_decision.create",
+            target_type="screening_decision",
+            target_id=screening_decision.decision_id,
+            after={
+                "paper_id": paper_id,
+                "level": level,
+                "decision": decision,
+                "confidence": confidence,
+            },
+        )
+        return screening_decision
 
 
 class ResultRepository(BaseRepository):

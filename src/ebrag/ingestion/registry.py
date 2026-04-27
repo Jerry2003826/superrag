@@ -123,6 +123,7 @@ class LiteratureRegistry:
             report_type="primary" if candidate is None else "duplicate_candidate",
             confidence=1.0 if candidate is None else 0.85,
             evidence=None if candidate is None else "normalized_title + first_author + year",
+            human_review_required=candidate is not None,
         )
         duplicate_kind = "candidate" if candidate is not None else None
         if duplicate_kind is not None:

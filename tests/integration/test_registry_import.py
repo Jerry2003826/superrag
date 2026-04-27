@@ -39,5 +39,6 @@ def test_import_metadata_csv_deduplicates_and_links_reports(
     assert len(studies) == 1
     assert len(reports) == 2
     assert {report.report_type for report in reports} == {"primary", "duplicate_candidate"}
+    assert any(report.human_review_required for report in reports)
     assert any(audit.action == "paper.duplicate_exact" for audit in audits)
     assert any(audit.action == "paper.duplicate_candidate" for audit in audits)

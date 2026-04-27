@@ -61,6 +61,7 @@ def upgrade() -> None:
         sa.Column("report_type", sa.String(length=64), nullable=False),
         sa.Column("confidence", sa.Float(), nullable=False),
         sa.Column("evidence", sa.Text(), nullable=True),
+        sa.Column("human_review_required", sa.Boolean(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
     op.create_index("ix_study_reports_paper_id", "study_reports", ["paper_id"])
