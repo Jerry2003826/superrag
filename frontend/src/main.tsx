@@ -1,4 +1,4 @@
-import React, { ChangeEvent, FormEvent, useMemo, useState } from "react";
+import React, { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Activity,
@@ -8,11 +8,14 @@ import {
   FileText,
   FlaskConical,
   KeyRound,
+  Languages,
   Loader2,
   Search,
   ShieldCheck,
   UploadCloud
 } from "lucide-react";
+import { copy, defaultForm, detectInitialLocale, localeStorageKey, localizeValue } from "./i18n";
+import type { Locale, Translation } from "./i18n";
 import "./styles.css";
 
 type RegisteredPaper = {
@@ -48,10 +51,25 @@ type QueryResult = {
   verification: Array<{ verdict: string; reason: string | null }>;
 };
 
+type StatusState =
+  | { type: "ready" }
+  | { type: "apiKeySaved" }
+  | { type: "apiKeyCleared" }
+  | { type: "registered"; paperId: string }
+  | { type: "parsed"; count: number }
+  | { type: "extractionPersisted" }
+  | { type: "answerAbstained" }
+  | { type: "evidenceAnswerReady" };
+
 const apiBase = import.meta.env.VITE_API_BASE_URL ?? "/api";
 const apiKeyStorageKey = "ebrag.apiKey";
 
-async function requestJson<T>(path: string, apiKey: string, init?: RequestInit): Promise<T> {
+async function requestJson<T>(
+  path: string,
+  apiKey: string,
+  unauthorizedMessage: string,
+  init?: RequestInit
+): Promise<T> {
   const headers = new Headers(init?.headers);
   const trimmedApiKey = apiKey.trim();
   if (trimmedApiKey) {
@@ -68,42 +86,62 @@ async function requestJson<T>(path: string, apiKey: string, init?: RequestInit):
       detail = detailText;
     }
     if (response.status === 401) {
-      throw new Error("API key missing or invalid. Save the deployment API key in Runtime.");
+      throw new Error(unauthorizedMessage);
     }
     throw new Error(detail || `Request failed: ${response.status}`);
   }
   return (await response.json()) as T;
 }
 
+function formatStatus(t: Translation, status: StatusState): string {
+  switch (status.type) {
+    case "ready":
+      return t.status.ready;
+    case "apiKeySaved":
+      return t.status.apiKeySaved;
+    case "apiKeyCleared":
+      return t.status.apiKeyCleared;
+    case "registered":
+      return t.status.registered(status.paperId);
+    case "parsed":
+      return t.status.parsed(status.count);
+    case "extractionPersisted":
+      return t.status.extractionPersisted;
+    case "answerAbstained":
+      return t.status.answerAbstained;
+    case "evidenceAnswerReady":
+      return t.status.evidenceAnswerReady;
+  }
+}
+
 function App() {
+  const [locale, setLocale] = useState<Locale>(() => detectInitialLocale());
+  const t = copy[locale];
   const [paper, setPaper] = useState<RegisteredPaper | null>(null);
   const [upload, setUpload] = useState<UploadResult | null>(null);
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [status, setStatus] = useState("Ready");
+  const [status, setStatus] = useState<StatusState>({ type: "ready" });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(apiKeyStorageKey) ?? "");
   const [apiKeyDraft, setApiKeyDraft] = useState(apiKey);
-  const [form, setForm] = useState({
-    title: "Compound X reduces IL-6 in APP/PS1 mice",
-    doi: `10.0000/local-${Date.now()}`,
-    authors: "Li, Wang",
-    year: "2026",
-    journal: "Local Evidence Review",
-    abstract: "Compound X reduced IL-6 in a mouse model.",
-    query: "Does Compound X reduce IL-6 in animal studies?"
-  });
+  const [form, setForm] = useState(() => defaultForm(locale));
+
+  useEffect(() => {
+    document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
+    localStorage.setItem(localeStorageKey, locale);
+  }, [locale]);
 
   const evidenceId = upload?.evidence_span_ids?.[0] ?? "E00000001";
 
   const progress = useMemo(() => {
     return [
-      { label: "Paper", done: Boolean(paper) },
-      { label: "Document", done: Boolean(upload) },
-      { label: "Evidence", done: Boolean(queryResult) }
+      { label: t.runtime.paper, done: Boolean(paper) },
+      { label: t.runtime.document, done: Boolean(upload) },
+      { label: t.runtime.evidence, done: Boolean(queryResult) }
     ];
-  }, [paper, upload, queryResult]);
+  }, [paper, queryResult, t, upload]);
 
   function updateForm(key: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -114,10 +152,10 @@ function App() {
     setApiKey(trimmed);
     if (trimmed) {
       localStorage.setItem(apiKeyStorageKey, trimmed);
-      setStatus("API key saved");
+      setStatus({ type: "apiKeySaved" });
     } else {
       localStorage.removeItem(apiKeyStorageKey);
-      setStatus("API key cleared");
+      setStatus({ type: "apiKeyCleared" });
     }
   }
 
@@ -129,22 +167,25 @@ function App() {
       const payload = {
         title: form.title,
         doi: form.doi,
-        authors: form.authors.split(",").map((author) => author.trim()).filter(Boolean),
+        authors: form.authors
+          .split(",")
+          .map((author) => author.trim())
+          .filter(Boolean),
         year: Number(form.year),
         journal: form.journal,
         abstract: form.abstract,
         source_database: "frontend",
         source_url: "http://localhost/frontend"
       };
-      const result = await requestJson<RegisteredPaper>("/papers/register", apiKey, {
+      const result = await requestJson<RegisteredPaper>("/papers/register", apiKey, t.errors.unauthorized, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
       setPaper(result);
-      setStatus(`Registered ${result.paper_id}`);
+      setStatus({ type: "registered", paperId: result.paper_id });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Registration failed");
+      setError(caught instanceof Error ? caught.message : t.errors.registrationFailed);
     } finally {
       setBusy(null);
     }
@@ -156,17 +197,18 @@ function App() {
     setError(null);
     try {
       const data = new FormData();
-      data.append("source_format", selectedFile.name.toLowerCase().endsWith(".pdf") ? "PDF" : selectedFile.name.toLowerCase().endsWith(".txt") ? "TEXT" : "JATS_XML");
+      const lowerName = selectedFile.name.toLowerCase();
+      data.append("source_format", lowerName.endsWith(".pdf") ? "PDF" : lowerName.endsWith(".txt") ? "TEXT" : "JATS_XML");
       data.append("document_id", selectedFile.name);
       data.append("file", selectedFile);
-      const result = await requestJson<UploadResult>(`/papers/${paper.paper_id}/documents`, apiKey, {
+      const result = await requestJson<UploadResult>(`/papers/${paper.paper_id}/documents`, apiKey, t.errors.unauthorized, {
         method: "POST",
         body: data
       });
       setUpload(result);
-      setStatus(`Parsed ${result.chunk_count} chunks`);
+      setStatus({ type: "parsed", count: result.chunk_count });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Upload failed");
+      setError(caught instanceof Error ? caught.message : t.errors.uploadFailed);
     } finally {
       setBusy(null);
     }
@@ -177,7 +219,7 @@ function App() {
     setBusy("extract");
     setError(null);
     try {
-      await requestJson(`/extraction/${paper.paper_id}/run`, apiKey, {
+      await requestJson(`/extraction/${paper.paper_id}/run`, apiKey, t.errors.unauthorized, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -213,9 +255,9 @@ function App() {
           }
         })
       });
-      setStatus("Extraction persisted");
+      setStatus({ type: "extractionPersisted" });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Extraction failed");
+      setError(caught instanceof Error ? caught.message : t.errors.extractionFailed);
     } finally {
       setBusy(null);
     }
@@ -226,15 +268,15 @@ function App() {
     setBusy("query");
     setError(null);
     try {
-      const result = await requestJson<QueryResult>("/query/full", apiKey, {
+      const result = await requestJson<QueryResult>("/query/full", apiKey, t.errors.unauthorized, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: form.query, query_scope: "animal" })
       });
       setQueryResult(result);
-      setStatus(result.abstained ? "Answer abstained" : "Evidence answer ready");
+      setStatus(result.abstained ? { type: "answerAbstained" } : { type: "evidenceAnswerReady" });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Query failed");
+      setError(caught instanceof Error ? caught.message : t.errors.queryFailed);
     } finally {
       setBusy(null);
     }
@@ -250,16 +292,42 @@ function App() {
             </div>
             <div>
               <p className="text-sm font-semibold">Evidence Bio RAG</p>
-              <p className="text-xs text-slate">Single-node review engine</p>
+              <p className="text-xs text-slate">{t.app.subtitle}</p>
             </div>
           </div>
-          <nav className="mt-8 space-y-1">
+
+          <div className="mt-5 rounded-lg border border-line bg-mist p-2">
+            <label className="mb-2 flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wide text-slate">
+              <Languages size={14} /> {t.app.language}
+            </label>
+            <div className="grid grid-cols-2 gap-1">
+              {[
+                { label: "中文", value: "zh" as const },
+                { label: "English", value: "en" as const }
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  className={
+                    locale === option.value
+                      ? "rounded-md bg-ink px-2 py-2 text-xs font-semibold text-white"
+                      : "rounded-md px-2 py-2 text-xs font-semibold text-slate hover:bg-white hover:text-ink"
+                  }
+                  type="button"
+                  onClick={() => setLocale(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <nav className="mt-6 space-y-1">
             {[
-              { label: "Register", href: "#register", icon: BookOpen },
-              { label: "Upload", href: "#upload", icon: UploadCloud },
-              { label: "Extract", href: "#extract", icon: DatabaseZap },
-              { label: "Query", href: "#query", icon: Search },
-              { label: "Verify", href: "#query", icon: ShieldCheck }
+              { label: t.nav.register, href: "#register", icon: BookOpen },
+              { label: t.nav.upload, href: "#upload", icon: UploadCloud },
+              { label: t.nav.extract, href: "#extract", icon: DatabaseZap },
+              { label: t.nav.query, href: "#query", icon: Search },
+              { label: t.nav.verify, href: "#query", icon: ShieldCheck }
             ].map(({ label, href, icon: Icon }) => (
               <a key={label} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate hover:bg-mist hover:text-ink" href={href}>
                 {React.createElement(Icon as typeof BookOpen, { size: 17 })}
@@ -268,31 +336,31 @@ function App() {
             ))}
           </nav>
           <div className="mt-8 rounded-lg border border-line bg-mist p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate">Runtime</p>
-            <p className="mt-2 text-sm font-semibold">{status}</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate">{t.runtime.title}</p>
+            <p className="mt-2 text-sm font-semibold">{formatStatus(t, status)}</p>
             <div className="mt-4 rounded-lg border border-line bg-white p-3">
               <label className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-slate">
-                <KeyRound size={14} /> API key
+                <KeyRound size={14} /> {t.runtime.apiKey}
               </label>
               <div className="mt-2 flex gap-2">
                 <input
                   className="min-w-0 flex-1 rounded-lg border border-line px-3 py-2 text-xs outline-none focus:border-teal"
                   type="password"
                   value={apiKeyDraft}
-                  placeholder="X-API-Key"
+                  placeholder={t.runtime.apiKeyPlaceholder}
                   onChange={(event) => setApiKeyDraft(event.target.value)}
                 />
                 <button className="rounded-lg bg-ink px-3 py-2 text-xs font-semibold text-white" type="button" onClick={saveApiKey}>
-                  Save
+                  {t.runtime.save}
                 </button>
               </div>
-              <p className={apiKey ? "mt-2 text-xs text-teal" : "mt-2 text-xs text-slate"}>{apiKey ? "configured" : "missing"}</p>
+              <p className={apiKey ? "mt-2 text-xs text-teal" : "mt-2 text-xs text-slate"}>{apiKey ? t.runtime.configured : t.runtime.missing}</p>
             </div>
             <div className="mt-4 space-y-2">
               {progress.map((item) => (
                 <div key={item.label} className="flex items-center justify-between text-xs">
                   <span>{item.label}</span>
-                  <span className={item.done ? "text-teal" : "text-slate"}>{item.done ? "ready" : "pending"}</span>
+                  <span className={item.done ? "text-teal" : "text-slate"}>{item.done ? t.runtime.ready : t.runtime.pending}</span>
                 </div>
               ))}
             </div>
@@ -303,14 +371,17 @@ function App() {
           <header className="mb-6 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
             <div>
               <p className="flex items-center gap-2 text-sm font-medium text-teal">
-                <Activity size={16} /> Evidence-grounded systematic review
+                <Activity size={16} /> {t.app.eyebrow}
               </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
-                Literature intake, extraction, and cited answers in one workspace.
-              </h1>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">{t.app.headline}</h1>
             </div>
-            <a className="inline-flex items-center gap-2 rounded-lg border border-line bg-white px-4 py-2 text-sm font-medium shadow-soft" href={`${apiBase}/health`} target="_blank">
-              Health <ArrowRight size={16} />
+            <a
+              className="inline-flex items-center gap-2 rounded-lg border border-line bg-white px-4 py-2 text-sm font-medium shadow-soft"
+              href={`${apiBase}/health`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t.app.health} <ArrowRight size={16} />
             </a>
           </header>
 
@@ -320,87 +391,87 @@ function App() {
             <div className="space-y-5">
               <form id="register" onSubmit={registerPaper} className="rounded-lg border border-line bg-white p-5 shadow-soft">
                 <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-semibold">Register literature</h2>
+                  <h2 className="text-lg font-semibold">{t.register.title}</h2>
                   {paper && <span className="rounded-full bg-teal/10 px-3 py-1 text-xs font-medium text-teal">{paper.paper_id}</span>}
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <Input label="Title" value={form.title} onChange={(value) => updateForm("title", value)} className="md:col-span-2" />
-                  <Input label="DOI" value={form.doi} onChange={(value) => updateForm("doi", value)} />
-                  <Input label="Year" value={form.year} onChange={(value) => updateForm("year", value)} />
-                  <Input label="Authors" value={form.authors} onChange={(value) => updateForm("authors", value)} />
-                  <Input label="Journal" value={form.journal} onChange={(value) => updateForm("journal", value)} />
+                  <Input label={t.register.titleLabel} value={form.title} onChange={(value) => updateForm("title", value)} className="md:col-span-2" />
+                  <Input label={t.register.doi} value={form.doi} onChange={(value) => updateForm("doi", value)} />
+                  <Input label={t.register.year} value={form.year} onChange={(value) => updateForm("year", value)} />
+                  <Input label={t.register.authors} value={form.authors} onChange={(value) => updateForm("authors", value)} />
+                  <Input label={t.register.journal} value={form.journal} onChange={(value) => updateForm("journal", value)} />
                 </div>
                 <label className="mt-3 block text-sm font-medium">
-                  Abstract
+                  {t.register.abstract}
                   <textarea className="mt-1 min-h-20 w-full rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-teal" value={form.abstract} onChange={(event) => updateForm("abstract", event.target.value)} />
                 </label>
                 <button className="mt-4 inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={busy === "register"}>
-                  {busy === "register" && <Loader2 className="animate-spin" size={16} />} Register paper
+                  {busy === "register" && <Loader2 className="animate-spin" size={16} />} {t.register.button}
                 </button>
               </form>
 
               <section id="upload" className="rounded-lg border border-line bg-white p-5 shadow-soft">
                 <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-semibold">Upload source document</h2>
-                  {upload && <span className="rounded-full bg-amber/10 px-3 py-1 text-xs font-medium text-amber">{upload.parse_status}</span>}
+                  <h2 className="text-lg font-semibold">{t.upload.title}</h2>
+                  {upload && <span className="rounded-full bg-amber/10 px-3 py-1 text-xs font-medium text-amber">{localizeValue(locale, upload.parse_status)}</span>}
                 </div>
                 <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-line bg-mist px-4 py-6 text-center hover:border-teal">
                   <FileText className="mb-3 text-teal" />
-              <span className="text-sm font-medium">{selectedFile ? selectedFile.name : "PDF, XML, or TXT source"}</span>
-              <span className="mt-1 text-xs text-slate">MinIO object, parsed chunks, evidence spans</span>
+                  <span className="text-sm font-medium">{selectedFile ? selectedFile.name : t.upload.placeholder}</span>
+                  <span className="mt-1 text-xs text-slate">{t.upload.helper}</span>
                   <input type="file" className="hidden" accept=".pdf,.xml,.txt" onChange={(event: ChangeEvent<HTMLInputElement>) => setSelectedFile(event.target.files?.[0] ?? null)} />
                 </label>
                 <button className="mt-4 inline-flex items-center gap-2 rounded-lg bg-teal px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={!paper || !selectedFile || busy === "upload"} onClick={uploadDocument}>
-                  {busy === "upload" && <Loader2 className="animate-spin" size={16} />} Upload and parse
+                  {busy === "upload" && <Loader2 className="animate-spin" size={16} />} {t.upload.button}
                 </button>
                 {upload && (
                   <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                    <Metric label="Chunks" value={upload.chunk_count} />
-                    <Metric label="Evidence" value={upload.evidence_span_count} />
-                    <Metric label="Parsed" value={upload.parsed_id} />
+                    <Metric label={t.upload.chunks} value={upload.chunk_count} />
+                    <Metric label={t.upload.evidence} value={upload.evidence_span_count} />
+                    <Metric label={t.upload.parsed} value={upload.parsed_id} />
                   </div>
                 )}
               </section>
 
               <section id="extract" className="rounded-lg border border-line bg-white p-5 shadow-soft">
                 <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-semibold">Extraction</h2>
-                  <span className="text-xs text-slate">Structured results</span>
+                  <h2 className="text-lg font-semibold">{t.extract.title}</h2>
+                  <span className="text-xs text-slate">{t.extract.subtitle}</span>
                 </div>
                 <button className="mt-4 inline-flex items-center gap-2 rounded-lg border border-line bg-white px-4 py-2 text-sm font-semibold disabled:opacity-50" disabled={!paper || !upload || busy === "extract"} onClick={runSampleExtraction}>
-                  {busy === "extract" && <Loader2 className="animate-spin" size={16} />} Persist sample extraction
+                  {busy === "extract" && <Loader2 className="animate-spin" size={16} />} {t.extract.button}
                 </button>
               </section>
             </div>
 
             <aside id="query" className="rounded-lg border border-line bg-white p-5 shadow-soft">
-              <h2 className="text-lg font-semibold">Evidence answer</h2>
+              <h2 className="text-lg font-semibold">{t.query.title}</h2>
               <form onSubmit={runQuery} className="mt-4 flex gap-2">
                 <input className="min-w-0 flex-1 rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-teal" value={form.query} onChange={(event) => updateForm("query", event.target.value)} />
                 <button className="inline-flex items-center gap-2 rounded-lg bg-teal px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={busy === "query"}>
-                  {busy === "query" ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />} Query
+                  {busy === "query" ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />} {t.query.button}
                 </button>
               </form>
               <div className="mt-5 rounded-lg border border-line bg-mist p-4">
                 {!queryResult ? (
-                  <p className="text-sm text-slate">Cited answer sentences, claims, and verification verdicts appear here.</p>
+                  <p className="text-sm text-slate">{t.query.empty}</p>
                 ) : (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-medium">{queryResult.sufficiency}</span>
-                      <span className={queryResult.abstained ? "text-amber" : "text-teal"}>{queryResult.abstained ? "abstained" : "answered"}</span>
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-medium">{localizeValue(locale, queryResult.sufficiency)}</span>
+                      <span className={queryResult.abstained ? "text-amber" : "text-teal"}>{queryResult.abstained ? t.query.abstained : t.query.answered}</span>
                     </div>
                     {queryResult.answer.sentences.map((sentence, index) => (
                       <article key={index} className="rounded-lg bg-white p-4">
                         <p className="text-sm leading-6">{sentence.text}</p>
                         <p className="mt-3 text-xs text-slate">
-                          Results: {sentence.cited_result_ids.join(", ")} · Spans: {sentence.cited_evidence_span_ids.join(", ")}
+                          {t.query.results}: {sentence.cited_result_ids.join(", ")} · {t.query.spans}: {sentence.cited_evidence_span_ids.join(", ")}
                         </p>
                       </article>
                     ))}
                     {queryResult.verification.map((verdict, index) => (
                       <details key={index} className="rounded-lg bg-white p-3 text-sm">
-                        <summary className="cursor-pointer font-medium">{verdict.verdict}</summary>
+                        <summary className="cursor-pointer font-medium">{localizeValue(locale, verdict.verdict)}</summary>
                         <p className="mt-2 text-slate">{verdict.reason}</p>
                       </details>
                     ))}
